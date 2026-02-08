@@ -1,0 +1,11 @@
+[project]
+name = "dataset-generation"
+version = "0.1.0"
+description = "CircleNet Dataset Generator - Synthetic social network data for Hadoop/MapReduce"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.66.0",
+]

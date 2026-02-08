@@ -1,0 +1,134 @@
+# Small configuration for testing and development
+# Generates a small dataset quickly for validation
+
+seed: 42
+
+output:
+  directory: "./output"
+  chunk_size: 1000
+
+# Small dataset sizes for testing
+sizes:
+  num_users: 1000
+  num_follows: 5000
+  num_activities: 3000
+
+time:
+  max_timestamp: 8760
+  min_timestamp: 0
+  recent_window: 2160
+
+users:
+  nickname_min_length: 10
+  nickname_max_length: 20
+  jobtitle_min_length: 10
+  jobtitle_max_length: 20
+
+  regions:
+    min_code: 1
+    max_code: 20
+    distribution_alpha: 1.5
+
+  hobbies:
+    - name: "Gaming"
+      weight: 15
+    - name: "Reading"
+      weight: 10
+    - name: "Cooking"
+      weight: 8
+    - name: "Music"
+      weight: 10
+    - name: "Sports"
+      weight: 12
+    - name: "NappingCompetitively"
+      weight: 5
+    - name: "MemeArcheology"
+      weight: 8
+    - name: "ProcrastinationArts"
+      weight: 10
+    - name: "CoffeeHoarding"
+      weight: 7
+    - name: "PlantParenting"
+      weight: 5
+    - name: "PodcastBinging"
+      weight: 6
+    - name: "BoardGameNights"
+      weight: 4
+
+follows:
+  popularity_alpha: 2.0
+  reciprocity_probability: 0.3
+  min_zero_followers_pct: 0.05
+  description_templates:
+    # Realistic
+    - "met at work event years ago"
+    - "old friends from college days"
+    - "neighbors who share wifi password"
+    - "gym buddies since forever"
+    - "carpool gang for life"
+    # Quirky
+    - "bonded over terrible coffee"
+    - "both hate Mondays equally"
+    - "survived same boring meeting"
+    - "argued about pizza toppings"
+    - "witnessed the printer jam incident"
+    - "elevator small talk champions"
+    - "microwave drama survivors"
+    - "parking spot nemesis turned friend"
+    - "accidentally wore same outfit once"
+    - "escape room teammates forever"
+    - "share memes at 3am regularly"
+    - "met debating Oxford comma use"
+    - "snack drawer raiding partners"
+    - "zoom background critics society"
+    - "deadline panic buddies forever"
+    - "coffee machine queue besties"
+    - "plants dying together club"
+    - "reply-all incident support group"
+
+activities:
+  action_types:
+    - name: "viewed"
+      weight: 40
+    - name: "liked"
+      weight: 20
+    - name: "commented"
+      weight: 10
+    - name: "shared"
+      weight: 5
+    - name: "poked"
+      weight: 4
+    - name: "messaged"
+      weight: 5
+    - name: "highfived"
+      weight: 3
+    - name: "waved"
+      weight: 3
+    - name: "stalked"
+      weight: 2
+    - name: "screenshotted"
+      weight: 2
+    - name: "bookmarked"
+      weight: 2
+    - name: "blocked"
+      weight: 1
+    - name: "gifted"
+      weight: 1
+
+  inactive_user_pct: 0.10
+  recently_inactive_pct: 0.15
+  time_decay_factor: 0.7
+
+  activity_tiers:
+    - name: "power_user"
+      pct: 0.05
+      avg_actions: 50
+    - name: "active"
+      pct: 0.25
+      avg_actions: 15
+    - name: "casual"
+      pct: 0.40
+      avg_actions: 5
+    - name: "lurker"
+      pct: 0.30
+      avg_actions: 1

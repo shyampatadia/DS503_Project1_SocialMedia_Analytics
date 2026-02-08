@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Generated output
+output/
+
+my_output_final
+my_output
+
+CLAUDE.md
+task1_description.md

@@ -1,0 +1,220 @@
+# CircleNet Dataset Generator Configuration
+
+# Random seed for reproducibility
+seed: 42
+
+# Output settings
+output:
+  directory: "./output"
+  chunk_size: 10000  # Rows written per chunk for memory efficiency
+
+# Dataset sizes
+sizes:
+  num_users: 200000      # Number of users (CircleNetPage rows)
+  num_follows: 20000000  # Number of follow relationships
+  num_activities: 10000000  # Number of activity log entries
+
+# Time configuration (logical timestamps, 1 unit = 1 hour)
+time:
+  max_timestamp: 8760    # "Now" - max timestamp (1 year = 8760 hours)
+  min_timestamp: 0       # Start of time range
+  recent_window: 2160    # 90 days in hours - used for "recent activity" analytics
+
+# User generation (CircleNetPage)
+users:
+  nickname_min_length: 10
+  nickname_max_length: 20
+  jobtitle_min_length: 10
+  jobtitle_max_length: 20
+
+  # Region distribution (non-uniform)
+  regions:
+    min_code: 1
+    max_code: 50
+    # Power-law alpha for region popularity (higher = more skewed)
+    distribution_alpha: 1.5
+
+  # Hobby vocabulary with weights (mix of normal and quirky)
+  hobbies:
+    # Normal hobbies
+    - name: "Reading"
+      weight: 12
+    - name: "Gaming"
+      weight: 18
+    - name: "Photography"
+      weight: 8
+    - name: "Cooking"
+      weight: 10
+    - name: "Traveling"
+      weight: 14
+    - name: "Music"
+      weight: 12
+    - name: "Sports"
+      weight: 14
+    - name: "Gardening"
+      weight: 5
+    - name: "Writing"
+      weight: 6
+    - name: "Painting"
+      weight: 5
+    - name: "Yoga"
+      weight: 7
+    - name: "Hiking"
+      weight: 9
+    # Quirky/unusual hobbies
+    - name: "NappingCompetitively"
+      weight: 4
+    - name: "CloudWatching"
+      weight: 3
+    - name: "ExtremeCouponing"
+      weight: 2
+    - name: "BubbleWrapPopping"
+      weight: 3
+    - name: "CheeseCollecting"
+      weight: 2
+    - name: "CompetitiveGoogling"
+      weight: 3
+    - name: "TrainSpotting"
+      weight: 2
+    - name: "SockPuppetry"
+      weight: 2
+    - name: "PeopleWatching"
+      weight: 5
+    - name: "MemeArcheology"
+      weight: 6
+    - name: "ProcrastinationArts"
+      weight: 8
+    - name: "CoffeeHoarding"
+      weight: 5
+    - name: "PlantParenting"
+      weight: 6
+    - name: "ThriftFlipping"
+      weight: 4
+    - name: "VinylHunting"
+      weight: 3
+    - name: "EscapeRooming"
+      weight: 4
+    - name: "PodcastBinging"
+      weight: 7
+    - name: "BoardGameNights"
+      weight: 6
+    - name: "RetroGaming"
+      weight: 5
+    - name: "UrbanExploring"
+      weight: 3
+
+# Follow graph generation
+follows:
+  # Power-law exponent for follower distribution (creates popular users)
+  popularity_alpha: 2.0
+
+  # Probability that if A follows B, B also follows A
+  reciprocity_probability: 0.3
+
+  # Minimum percentage of users with zero followers
+  min_zero_followers_pct: 0.05
+
+  # Description templates for relationship reasons (quirky and realistic mix)
+  description_templates:
+    # Realistic ones
+    - "met at work event years ago"
+    - "old friends from college days"
+    - "former roommates never forget"
+    - "neighbors who share wifi password"
+    - "colleagues from the IT dept"
+    - "met at a wedding reception"
+    - "gym buddies since forever"
+    - "book club members unite"
+    - "carpool gang for life"
+    - "parents met at school pickup"
+    # Quirky/funny ones
+    - "bonded over terrible coffee"
+    - "both hate Mondays equally"
+    - "survived same boring meeting"
+    - "argued about pizza toppings"
+    - "witnessed the printer jam incident"
+    - "elevator small talk champions"
+    - "same WiFi name complaint crew"
+    - "microwave drama survivors"
+    - "parking spot nemesis turned friend"
+    - "vending machine regulars club"
+    - "accidentally wore same outfit once"
+    - "both pretend to like kale"
+    - "escape room teammates forever"
+    - "karaoke night legends"
+    - "pet photos exchange program"
+    - "complain about weather together"
+    - "share memes at 3am regularly"
+    - "met debating Oxford comma use"
+    - "fantasy football frenemies"
+    - "potluck conspirators anonymous"
+    - "standing desk solidarity group"
+    - "reply-all incident support group"
+    - "snack drawer raiding partners"
+    - "zoom background critics society"
+    - "met during fire drill chaos"
+    - "coffee machine queue besties"
+    - "both got lost on floor three"
+    - "passive aggressive email allies"
+    - "plants dying together club"
+    - "deadline panic buddies forever"
+
+# Activity log generation
+activities:
+  # Action types with relative weights (mix of standard and quirky)
+  action_types:
+    - name: "viewed"
+      weight: 40
+    - name: "liked"
+      weight: 20
+    - name: "commented"
+      weight: 10
+    - name: "shared"
+      weight: 5
+    - name: "poked"
+      weight: 4
+    - name: "messaged"
+      weight: 5
+    - name: "highfived"
+      weight: 3
+    - name: "waved"
+      weight: 3
+    - name: "stalked"
+      weight: 2
+    - name: "blocked"
+      weight: 1
+    - name: "unblocked"
+      weight: 1
+    - name: "screenshotted"
+      weight: 2
+    - name: "bookmarked"
+      weight: 2
+    - name: "reported"
+      weight: 1
+    - name: "gifted"
+      weight: 1
+
+  # Percentage of users with zero activity
+  inactive_user_pct: 0.10
+
+  # Percentage of users inactive in last 90 days (among active users)
+  recently_inactive_pct: 0.15
+
+  # Activity frequency distribution
+  # Users are assigned to tiers with different activity levels
+  activity_tiers:
+    - name: "power_user"
+      pct: 0.05
+      avg_actions: 200
+    - name: "active"
+      pct: 0.25
+      avg_actions: 50
+    - name: "casual"
+      pct: 0.40
+      avg_actions: 15
+    - name: "lurker"
+      pct: 0.30
+      avg_actions: 3
+
+  # Time decay - more recent activity is more likely
+  time_decay_factor: 0.7  # Higher = more activity concentrated near "now"
