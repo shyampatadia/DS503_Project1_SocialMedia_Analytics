@@ -14,11 +14,11 @@ sizes:
   num_follows: 20000000  # Number of follow relationships
   num_activities: 10000000  # Number of activity log entries
 
-# Time configuration (logical timestamps, 1 unit = 1 hour)
+# Time configuration (UTC timestamps - Unix epoch seconds)
 time:
-  max_timestamp: 8760    # "Now" - max timestamp (1 year = 8760 hours)
-  min_timestamp: 0       # Start of time range
-  recent_window: 2160    # 90 days in hours - used for "recent activity" analytics
+  max_timestamp: 1739145600    # "Now" - Feb 10, 2025 00:00:00 UTC
+  min_timestamp: 1707609600    # 1 year before - Feb 11, 2024 00:00:00 UTC
+  recent_window: 7776000       # 90 days in seconds (90 * 24 * 60 * 60)
 
 # User generation (CircleNetPage)
 users:

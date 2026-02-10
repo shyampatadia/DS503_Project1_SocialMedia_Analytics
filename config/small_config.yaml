@@ -13,10 +13,11 @@ sizes:
   num_follows: 5000
   num_activities: 3000
 
+# Time configuration (UTC timestamps - Unix epoch seconds)
 time:
-  max_timestamp: 8760
-  min_timestamp: 0
-  recent_window: 2160
+  max_timestamp: 1739145600    # "Now" - Feb 10, 2025 00:00:00 UTC
+  min_timestamp: 1707609600    # 1 year before - Feb 11, 2024 00:00:00 UTC
+  recent_window: 7776000       # 90 days in seconds (90 * 24 * 60 * 60)
 
 users:
   nickname_min_length: 10
