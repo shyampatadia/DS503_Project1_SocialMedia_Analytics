@@ -1,0 +1,86 @@
+Here we are going to write the instructions to complete the Project 1 deliverables:
+
+So this project is divided into 3 main tasks
+1. Creation of the dataset
+2. Adding the dataset to the HDFS system
+3. Doing the analytics on the Dataset using the MapReduce engine in Java.
+
+General Instructions:
+1. We need to create a PDF describing about how we accomplished each task, we have to write latex. With appropriate images inserted for each task.
+2. VERY IMPORTANT: Keep in mind that the solution should not only run but the goal is to design a scalable solution.
+
+
+Detailed Description of each task:
+
+1. Creating the Datasets: CircleNet Big Data Application
+Here we need to write the code to generate the datasets that can later be loaded into the HDFS and then we can use that to write functions in mapreduce to perform analytics.
+Here we are trying to create a dataset of a social media application named CircledNet.
+We can divide the dataset into 3 separate files below:
+    1A - CircleNetPage:
+        Description: Here each line represents a person and should include at least the following attributes:
+            A) ID: unique sequential number from 1 to 200,000
+            B) NickName: characters of length between 10-20 (dont use commas inside this string) - Should sound like a nickname
+            C) JobTitle: characters of length between 10-20 (dont use commas inside this string) - Should be realistic
+            D) RegionCode: number (int) between 1 to 50
+            E) FavoriteHobby: sequence of characters of length between 5 and 30 - Should be realistic
+    1B - Follows:
+        Description: each line describes a one-sided "follow" relationship from one-person to another and a timestamp indicating when this relationship was declared.
+        Below are the attributes that we need:
+            A) ColRel: unique sequential number (int) taken from value in the range from (1 to 20,000,000), basically "Follows" file will contain (20,000,000) lines
+            B) ID1: ID of the person who has a CircleNetPage, which can be from (1 to 200,000)
+            C) ID2: ID of the person who has a CircleNetPage, which can be from (1 to 200,000), but this should not be same as ID1.
+                - Note for ID2: this is not a symmetric relationship; a follow relationship between person ID1 and ID2, is not same as relationship between person ID2 to ID1.
+            D) DateOfRelation: Random number (int; sequential data type to use as date) between 1 to 1000000 to indicate when the follow relationship started.
+            E) Description: It describes the type of relationship between the 2, explaining the reason to follow: college-friend, etc. be creative here, the limit of character length is 20-50 characters.
+    1C - ActivityLog:
+        Description: Each line indicates a person num1 has accessed or made an action on the CircleNetPage that belongs to a second person num2, including the timing of the access/action.
+        Below are the attributes that we need for this dataset:
+            A) ActionId: unique sequential number from 1 to 10000000
+            B) ByWho: References the Id of the person who has access/made an action on the CircleNetPage
+            C) WhatPage: References the Id of the page that was accessed.
+            D) ActionType: text of characters length between 20-50 explaining if just viewed, left a note, poked, etc.
+                Note that any action other than "viewed" should be preceded by a "viewed" action.
+            E) ActionTime: random number between 1 to 1000000 (the granularity of the timestamp is the hour).
+
+General Instructions about the dataset creatio:
+1. We need to be as creative as possible while deciding various values for attributes.
+2. Also what other additional attributes that will make much more sense? Its not compulsory but it should make sense and we can be creative.
+3. The column names should not be included the file (which will cause problems). Only the values are listed. Each value should be separated by a comma. From the order of the columns, you will know what column a value represents.
+
+
+2. Loading the 3 dataset into the HDFS:
+We need to load the above 3 datasets into the HDFS, now keep in mind that below is the 3rd task where we need to perform analytics on them.
+
+3. Accomplish the below analytics tasks using MapReduce Jobs:
+Now keeping in mind the dataset that we have created and added it to the HDFS, we need to write MapReduce java programs, in order to analyze the data.
+
+Keep in mind the following instructions while writing the code for MapReduce code:
+    A. We need to first keep in mind that Hadoop differently reads and writes floats, integers and characters. Check IntWritable, FloatWritable, and text classes to know which to use.
+    B. We need to determine based on the task, is it Map-only job, or Map-reducer job or several map reducer job. Also if a task can be done with more simple solution then we need to think about that as well and describe why simple solution is better.
+    C. Develop a solution with and without a map-reduce combiner, when possible. If its not possible for our query please state that explicitly.
+    D. Also we need to work with as many features of Hadoop, as possible, without making the process to complex, just to explore features. If we try any ideas then we need to state that, one example can be: controlling number of mappers
+    E. Report the performance for the execution of each of your tasks. When possible (e.g. if we used combiner or any other optimization) compare the relative performance of different solutions.
+    F. We need to document each of the tasks.
+    G. So the points distribution considers how we optimized a solution, so first we can try to solve it with basic method, and then do optimization on top of it and explain that wherever its applicable.
+    H. We can consider using Combiner in our MapReduce jobs to reduce the IO costs, however make sure we understand conceptually when we can use Combiner and when we cannot.
+    I. Not all jobs can be optimized with Combiner, in fact combiner can deliver incorrect results in some cases.
+    J. If we are doing map-only job then Combiner will not make effect.
+    K. We can combine the performance of both the reduce-side join and replicated map-side join in our script, to determine most optimized solution.
+    L. Consider optimizing our solution by minimizing the use of multiple Mapreduce jobs.
+    M. If we can finish the task with Map Only job, we should skip the reducer to save IO costs.
+
+Points distribution guide:
+1. Simple solution with explanation [5 points]
+2. Clear description of advanced/optimized solution [3 points]
+3. Implementation of advanced/optimized solution. [2 points]
+
+
+Below are the tasks:
+Task A: Report the frequency of each favorite hobby on CircleNet
+Task B: Find the 10 most popular CircleNetPages, namely, those that got the most access based on the ActivityLog among all pages. Return Id, NickName and JobTitle.
+Task C: Report all CircleNetPage users (NickName and JobTitle) whose hobby (FavoriteHobby) is the same as our own (Pick any one).
+Task D: For each CircleNetPage compute the "popularity factor" of its owner. meaning for each CircleNetPage, report the owner's nickname, and the number of people that follow them. For page owners that arent listed in Follows, return a score of zero.
+Task E: Determine which people have favorites. That is for each CircleNetPage owner, determine how many total accesses/actions to CircleNetPages they have made (reported in ActivityLog) and how many distinct CircleNetPages they have accessed/interacted with in total. As for identifier of each CircleNetPage owner, you dont have to report name. IDs are enough.
+Task F: Report all owners of a CircleNetPage who are more popular than an average user, namely, those who have more followers than the average number of followers across all owners of a CircleNetPage.
+Task G: Identify "outdated" CircleNetPages. Return IDs, and nicknames of persons that have not accessed CircleNet for 90 days (i.e. no entries in the ActivityLog in the last 90 days.)
+Task H: Identify all those people who follow somebody's CircleNetPage in their same RegionCode but are not being followed back. Report IDs and nicknames.

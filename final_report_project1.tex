@@ -1,0 +1,210 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{longtable}
+
+\lstdefinestyle{code}{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    columns=fullflexible
+}
+
+\title{CircleNet Analytics Jobs Report\\Simple and Optimized Solutions (Task A--H)}
+\author{DS503 Project 1}
+\date{\today}
+
+\begin{document}
+    \maketitle
+
+    \section{How We Approached the Work}
+    For every task, we tried to do two versions:
+    \begin{itemize}
+        \item \textbf{Simple version}: direct and easy to understand.
+        \item \textbf{Optimized version}: reduce extra shuffle/IO when possible.
+    \end{itemize}
+
+    We also added execution timing in each class using a small helper (\texttt{JobTimer}) so we can compare both versions using \texttt{total\_time\_ms}.
+
+    \begin{lstlisting}[style=code,language=Java,caption={Timing helper used in all jobs}]
+boolean ok = JobTimer.run(job, "TaskAOptimized");
+JobTimer.total("TaskAOptimized", totalStart);
+    \end{lstlisting}
+
+    \section{Task A: Frequency of Favorite Hobby}
+    \subsection*{Simple Solution}
+    Read CircleNetPage, emit \texttt{(FavoriteHobby, 1)} in mapper, and sum in reducer.
+    This is classic counting.
+
+    \begin{lstlisting}[style=code,language=Java]
+// Mapper output
+context.write(new Text(hobby), new IntWritable(1));
+    \end{lstlisting}
+
+    \subsection*{Optimization Thinking and Implementation}
+    This task is safe for combiner because sum is associative and commutative.
+    So we used the same sum reducer as combiner to reduce network shuffle.
+
+    \begin{lstlisting}[style=code,language=Java]
+job.setCombinerClass(SumReducer.class);
+    \end{lstlisting}
+
+    \section{Task B: Top 10 Most Accessed Pages (Id, NickName, JobTitle)}
+    \subsection*{Simple Solution}
+    We used 3 jobs:
+    \begin{itemize}
+        \item Count accesses per page from ActivityLog.
+        \item Join counts with CircleNetPage to get nickname/job title.
+        \item Global top-10 selection.
+    \end{itemize}
+
+    \subsection*{Optimization Thinking and Implementation}
+    We reduced one stage by loading CircleNetPage as a cache file in the top-10 job.
+    So optimized flow is:
+    \begin{itemize}
+        \item Job 1: count page accesses with combiner.
+        \item Job 2: single reducer keeps top-10 and map-side lookup from cache.
+    \end{itemize}
+
+    \begin{lstlisting}[style=code,language=Java]
+job2.addCacheFile(new Path(args[1]).toUri()); // CircleNetPage.csv
+    \end{lstlisting}
+
+    \section{Task C: Users Whose Hobby Matches Chosen Hobby}
+    \subsection*{Simple Solution}
+    We pass hobby as argument (for example, \texttt{Chess}).
+    Mapper checks \texttt{FavoriteHobby == target}, outputs \texttt{NickName, JobTitle}.
+    Reducer only passes values.
+
+    \subsection*{Optimization Thinking and Implementation}
+    Reducer is not needed because there is no aggregation.
+    So optimized version is map-only (\texttt{setNumReduceTasks(0)}), which saves IO.
+
+    \begin{lstlisting}[style=code,language=Java]
+job.setNumReduceTasks(0);
+    \end{lstlisting}
+
+    \section{Task D: Popularity Factor (Follower Count per Page Owner)}
+    \subsection*{Simple Solution}
+    We reduce-side joined:
+    \begin{itemize}
+        \item Page data: \texttt{(ownerId, P,nick)}
+        \item Follows data: \texttt{(ownerId, F,1)} where ownerId is ID2
+    \end{itemize}
+    Reducer computes follower count and outputs zero if no follower rows were present.
+
+    \subsection*{Optimization Thinking and Implementation}
+    Optimized version first counts followers by ID2 (with combiner), then uses map-side join:
+    load count output through Distributed Cache and scan CircleNetPage once.
+    This avoids a full reduce-side join on all records.
+
+    \section{Task E: Favorites Behavior (Total Actions + Distinct Pages Accessed)}
+    \subsection*{Simple Solution}
+    Mapper emits \texttt{(ByWho, WhatPage)}.
+    Reducer counts:
+    \begin{itemize}
+        \item total actions = number of rows
+        \item distinct pages = set size of \texttt{WhatPage}
+    \end{itemize}
+
+    \subsection*{Optimization Thinking and Implementation}
+    Distinct counting in one reducer can be heavy.
+    So optimized approach:
+    \begin{itemize}
+        \item Job 1 deduplicates \texttt{(ByWho, WhatPage)} pairs.
+        \item Job 2 combines total-count stream and distinct-count stream.
+    \end{itemize}
+    This separates concerns and allows local aggregation with combiner in final stats stage.
+
+    \section{Task F: Users More Popular Than Average}
+    \subsection*{Simple Solution}
+    We did it in 3 stages:
+    \begin{itemize}
+        \item Join pages with follower counts (including zero).
+        \item Compute global average follower count.
+        \item Filter users where follower count \(>\) average.
+    \end{itemize}
+
+    \subsection*{Optimization Thinking and Implementation}
+    Optimized version:
+    \begin{itemize}
+        \item Count followers with combiner.
+        \item Compute average once.
+        \item Filter by scanning pages and doing cache lookup for follower count.
+    \end{itemize}
+    This avoids a larger reduce-side join output stage.
+
+    \section{Task G: Outdated Pages (No Access in Last 90 Days)}
+    \subsection*{Simple Solution}
+    Based on dataset timestamp granularity (hour), 90 days = 2160 hours.
+    Simple flow:
+    \begin{itemize}
+        \item Job 1 gets global max ActionTime.
+        \item Job 2 gets each user's latest ActionTime.
+        \item Job 3 joins with pages and keeps users with no activity or activity older than threshold.
+    \end{itemize}
+
+    \subsection*{Optimization Thinking and Implementation}
+    Optimized version removes one MR stage:
+    \begin{itemize}
+        \item Job 1 computes user latest ActionTime (combiner = max).
+        \item Driver computes global max by reading job output.
+        \item Job 2 map-side joins with pages using cache and filters outdated directly.
+    \end{itemize}
+
+    \section{Task H: Same Region One-Way Follows (Not Followed Back)}
+    \subsection*{Simple Solution}
+    Steps:
+    \begin{itemize}
+        \item Load page regions using cache.
+        \item Keep only follow edges where both users are in same region.
+        \item For each unordered pair, check if relation is one-way only.
+        \item Join result with pages to output \texttt{ID, nickname}.
+    \end{itemize}
+
+    \subsection*{Optimization Thinking and Implementation}
+    Optimized approach moves nickname lookup into reducer (cache-based), then runs a light dedup job.
+    So we avoid one larger reduce-side join stage.
+
+    \section{How We Compare Simple vs Optimized}
+    For each run, logs print per-job and total time:
+    \begin{itemize}
+        \item \texttt{... time\_ms=...}
+        \item \texttt{... total\_time\_ms=...}
+    \end{itemize}
+    For comparison table, we use \texttt{total\_time\_ms}.
+
+    \begin{longtable}{|l|r|r|}
+        \hline
+        \textbf{Task} & \textbf{Simple (ms)} & \textbf{Optimized (ms)}\\
+        \hline
+        A &  & \\
+        \hline
+        B &  & \\
+        \hline
+        C &  & \\
+        \hline
+        D &  & \\
+        \hline
+        E &  & \\
+        \hline
+        F &  & \\
+        \hline
+        G &  & \\
+        \hline
+        H &  & \\
+        \hline
+    \end{longtable}
+
+    \section{Short Reflection}
+    As a student team, we first wrote clear solutions that we can explain easily.
+    Then we optimized carefully using simple Hadoop ideas:
+    combiner where safe, map-only where possible, and map-side cache joins for smaller reference data.
+    This gave us better runtime while still keeping code understandable.
+
+\end{document}
