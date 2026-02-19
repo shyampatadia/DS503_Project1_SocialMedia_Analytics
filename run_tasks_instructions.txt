@@ -1,0 +1,163 @@
+DS503 BDM - Analytics Jobs Run Instructions (Simple + Optimized)
+
+0) One-time setup
+   Build JAR (from project root):
+   mvn clean package -DskipTests
+
+   Copy JAR into container:
+   docker cp target/ds503_bdm-1.0-SNAPSHOT.jar dadc9d47d16e:/home/ds503/
+
+   Inside container, set paths:
+   export JAR=/home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+   export PAGES=/circlenet/pages/CircleNetPage.csv
+   export FOLLOWS=/circlenet/follows/Follows.csv
+   export ACTIVITY=/circlenet/activitylog/ActivityLog.csv
+   export OUT=/circlenet/output
+   export LOCAL_OUT=/home/ds503/results
+   export CIRCLENET_TIMING_FILE=/home/ds503/task_times.csv
+
+   Optional reset before fresh benchmark:
+   rm -f $CIRCLENET_TIMING_FILE
+   rm -f $LOCAL_OUT
+   hdfs dfs -rm -r -f $OUT/taskA $OUT/taskB $OUT/taskC $OUT/taskD $OUT/taskE $OUT/taskF $OUT/taskG $OUT/taskH
+   mkdir -p $LOCAL_OUT
+
+Task A
+Run:
+  hadoop jar $JAR circlenet.taskA.TaskA $PAGES $OUT/taskA/simple
+  hadoop jar $JAR circlenet.taskA.TaskAOptimized $PAGES $OUT/taskA/optimized
+Inspect:
+  hdfs dfs -ls $OUT/taskA/simple
+  hdfs dfs -cat $OUT/taskA/simple/part-r-00000 | head -20
+  hdfs dfs -cat $OUT/taskA/optimized/part-r-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskA
+  mkdir -p $LOCAL_OUT/taskA/simple
+  mkdir -p $LOCAL_OUT/taskA/optimized
+  hdfs dfs -get $OUT/taskA/simple $LOCAL_OUT/taskA/
+  hdfs dfs -get $OUT/taskA/optimized $LOCAL_OUT/taskA/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskA ./results_taskA
+
+Task B
+Run:
+  hadoop jar $JAR circlenet.taskB.TaskBSimple $ACTIVITY $PAGES $OUT/taskB/tmp_count_simple $OUT/taskB/tmp_join_simple $OUT/taskB/simple
+  hadoop jar $JAR circlenet.taskB.TaskBOptimized $ACTIVITY $PAGES $OUT/taskB/tmp_count_opt $OUT/taskB/optimized
+Inspect:
+  hdfs dfs -cat $OUT/taskB/simple/part-r-00000 | head -20
+  hdfs dfs -cat $OUT/taskB/optimized/part-r-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskB
+  hdfs dfs -get $OUT/taskB/simple $LOCAL_OUT/taskB/
+  hdfs dfs -get $OUT/taskB/optimized $LOCAL_OUT/taskB/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskB ./results_taskB
+
+Task C (replace hobby text if needed)
+Run:
+  hadoop jar $JAR circlenet.taskC.TaskCSimple $PAGES $OUT/taskC/simple PodcastBinging
+  # optimized version is optional; latest timing shows no real gain
+  # hadoop jar $JAR circlenet.taskC.TaskCOptimized $PAGES $OUT/taskC/optimized PodcastBinging
+Inspect:
+  hdfs dfs -cat $OUT/taskC/simple/part-r-00000 | head -20
+  # hdfs dfs -cat $OUT/taskC/optimized/part-r-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskC
+  hdfs dfs -get $OUT/taskC/simple $LOCAL_OUT/taskC/
+  # hdfs dfs -get $OUT/taskC/optimized $LOCAL_OUT/taskC/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskC ./results_taskC
+
+Task D
+Run:
+  hadoop jar $JAR circlenet.taskD.TaskDSimple $PAGES $FOLLOWS $OUT/taskD/simple
+  hadoop jar $JAR circlenet.taskD.TaskDOptimized $PAGES $FOLLOWS $OUT/taskD/tmp_count_opt $OUT/taskD/optimized
+Inspect:
+  hdfs dfs -cat $OUT/taskD/simple/part-r-00000 | head -20
+  hdfs dfs -cat $OUT/taskD/optimized/part-r-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskD
+  hdfs dfs -get $OUT/taskD/simple $LOCAL_OUT/taskD/
+  hdfs dfs -get $OUT/taskD/optimized $LOCAL_OUT/taskD/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskD ./results_taskD
+
+Task E
+Run:
+  hadoop jar $JAR circlenet.taskE.TaskESimple $PAGES $ACTIVITY $OUT/taskE/simple
+  # optimized version is optional; latest timing is slower
+  # hadoop jar $JAR circlenet.taskE.TaskEOptimized $PAGES $ACTIVITY $OUT/taskE/optimized
+Inspect:
+  hdfs dfs -cat $OUT/taskE/simple/part-r-00000 | head -20
+  # hdfs dfs -cat $OUT/taskE/optimized/part-r-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskE
+  hdfs dfs -get -f $OUT/taskE/simple $LOCAL_OUT/taskE/
+  # hdfs dfs -get -f $OUT/taskE/optimized $LOCAL_OUT/taskE/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskE ./results_taskE
+
+Task F
+Run:
+  hadoop jar $JAR circlenet.taskF.TaskFSimple $PAGES $FOLLOWS $OUT/taskF/tmp_join_simple $OUT/taskF/tmp_avg_simple $OUT/taskF/simple
+  hadoop jar $JAR circlenet.taskF.TaskFOptimized $PAGES $FOLLOWS $OUT/taskF/tmp_count_opt $OUT/taskF/optimized
+Inspect:
+  hdfs dfs -cat $OUT/taskF/simple/part-r-00000 | head -20
+  hdfs dfs -cat $OUT/taskF/optimized/part-r-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskF
+  hdfs dfs -get $OUT/taskF/simple $LOCAL_OUT/taskF/
+  hdfs dfs -get $OUT/taskF/optimized $LOCAL_OUT/taskF/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskF ./results_taskF
+
+Task G
+Run:
+  hadoop jar $JAR circlenet.taskG.TaskGSimple $PAGES $ACTIVITY $OUT/taskG/tmp_globalmax_simple $OUT/taskG/tmp_usermax_simple $OUT/taskG/simple
+  hadoop jar $JAR circlenet.taskG.TaskGOptimized $PAGES $ACTIVITY $OUT/taskG/tmp_usermax_opt $OUT/taskG/optimized
+Inspect:
+  hdfs dfs -cat $OUT/taskG/simple/part-r-00000 | head -20
+  hdfs dfs -cat $OUT/taskG/optimized/part-m-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskG
+  hdfs dfs -get $OUT/taskG/simple $LOCAL_OUT/taskG/
+  hdfs dfs -get $OUT/taskG/optimized $LOCAL_OUT/taskG/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskG ./results_taskG
+
+Task H
+Run:
+  hadoop jar $JAR circlenet.taskH.TaskHSimple $PAGES $FOLLOWS $OUT/taskH/tmp_edges_simple $OUT/taskH/simple
+  hadoop jar $JAR circlenet.taskH.TaskHOptimized $PAGES $FOLLOWS $OUT/taskH/optimized
+Inspect:
+  hdfs dfs -cat $OUT/taskH/simple/part-r-00000 | head -20
+  hdfs dfs -cat $OUT/taskH/optimized/part-r-00000 | head -20
+Copy to container local:
+  mkdir -p $LOCAL_OUT/taskH
+  hdfs dfs -get $OUT/taskH/simple $LOCAL_OUT/taskH/
+  hdfs dfs -get $OUT/taskH/optimized $LOCAL_OUT/taskH/
+Copy to host:
+  docker cp dadc9d47d16e:/home/ds503/results/taskH ./results_taskH
+
+Timing file (single file for all runs)
+View:
+  cat $CIRCLENET_TIMING_FILE
+  rg ",total," $CIRCLENET_TIMING_FILE
+Copy to host:
+  docker cp dadc9d47d16e:$CIRCLENET_TIMING_FILE ./task_times.csv
+
+Quick compare idea
+Use only rows where phase=total, then compare:
+  TaskXSimple vs TaskXOptimized (time_ms)
+
+Correctness check (recommended after each task)
+1) Copy both outputs to local:
+   hdfs dfs -get -f $OUT/taskX/simple /tmp/taskX_simple
+   hdfs dfs -get -f $OUT/taskX/optimized /tmp/taskX_optimized
+2) Compare canonicalized files:
+   cat /tmp/taskX_simple/part-* | sort > /tmp/taskX_simple.txt
+   cat /tmp/taskX_optimized/part-* | sort > /tmp/taskX_optimized.txt
+   diff -u /tmp/taskX_simple.txt /tmp/taskX_optimized.txt
+3) If output format is intentionally different (for some tasks), compare key columns only.
+
+ docker cp dadc9d47d16e:/home/ds503/results_all/output ./output_all
