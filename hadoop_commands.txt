@@ -1,0 +1,109 @@
+Here will will understand the sql to hadoop mapping for every task present in part 3:
+
+Task 1:
+Report the frequency of each favorite hobby
+
+Here the dataset that will be needed is the CicleNetPage
+
+The simple SQL query will be:
+Select FavoriteHobby, COUNT (*) as count
+From CircleNetPage
+Group By FavoriteHobby.
+
+Basic framework to understand any hadoop query is
+Mapper: Transforms Input -> Intermediate Key/Value pairs
+Reducer: Aggregates values per Key
+
+
+Now there is a concept in Hadoop known as Combiner -> which is nothing but Mini-Reducer -> which is local reducer before the shuffling and sorting part.
+
+Main Concept in Hadoop we need to understand its working is:
+1. Its batch oriented, so here we dont run a function per se, we submit a job.
+2. Very simplified view of how hadoop handles and executes a query:
+    A. Reads HDFS
+    B. Runs Mappers - User has the control on what mapper does
+    C. Shuffles Data - Handled internally by MapReduce engine, User has no control.
+    D. Runs Reducers - User has the control on what reducer does
+    E. Writes outputs to HDFS
+
+
+Now how the code development works: (Keeping in mind our docker image and container setup)
+1. IntelliJ Idea - where we develop our Java Code
+2. Docker Container:
+    A. HDFS is installed
+The workflow of execution:
+1. We write the Java Code in our IDE (IntelliJ Idea).
+2. JVM complies it and creates a Jar file -> meaning our IntelliJ will create a JAR file.
+3. JAR file is then copied into the Container
+4. Hadoop runs JAR - basically it runs compiled Java code inside the container.
+
+Below can be one of the project structure - over simplified version for our project:
+ds503_bdm/
+ ├── pom.xml
+ └── src/main/java/
+     └── circlenet/
+         ├── taskA/
+         │   ├── TaskAMapper.java
+         │   ├── TaskAReducer.java
+         │   └── TaskADriver.java
+         ├── util/
+         │   └── JobTimer.java
+         └── common/
+             └── CsvParser.java
+
+
+
+
+Documentation of Task 2:
+First run the data generation script using the code present in the repository: https://github.com/shyampatadia/DS503_Project1_SocialMedia_Analytics/tree/generate-data-shyam
+
+Then make sure you know the path where the actual csv files are generated below is the current case on my local:
+D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\dataset_generation\my_output_full
+
+Now the above path is nothing but the Host Path, when creating the container on your local of the image named: cs585-ds503-image
+
+Now we need to start the hadoop cluster inside the docker container using the following command: hadoop/sbin/start-all.sh
+
+Once done, we can verify if its started successfully by using the following command: hdfs dfs -ls /
+It will show below directories:
+/tmp
+/user
+
+Now we will create a directory structure in the HDFS file system:
+1. Making base project directory: hdfs dfs -mkdir /circlenet
+2. Below we will create 3 folders using the following commands:
+hdfs dfs -mkdir /circlenet/pages
+hdfs dfs -mkdir /circlenet/follows
+hdfs dfs -mkdir /circlenet/activitylog
+
+Then we will put the csv files in those directories:
+hdfs dfs -put data/CircleNetPage.csv /circlenet/pages/
+hdfs dfs -put data/Follows.csv /circlenet/follows/
+hdfs dfs -put data/ActivityLog.csv /circlenet/activitylog/
+
+We can verify if the rows are appropriately loaded for each file we can use following commands:
+First 5 rows: hdfs dfs -cat /circlenet/follows/Follows.csv | head -5
+Last 5 rows: hdfs dfs -cat /circlenet/follows/Follows.csv | tail -5
+
+Okay now moving on to task 3, writing the code for all the 8 tasks.
+
+
+TASK 3: Writing the code for Mapper and reducer
+
+TASK A: Frequency of Favorite Hobby
+Write the code in class file named TaskA. We have to write 3 functions, one is mapper, the other reducer and one main function to write.
+Once we write the code for mapper and reducer, on the right hand side we can open the Maven and then open Lifecycle, in that click on Package, then why because the folder circlenet is created as a package and in that circlenet package we have create taskA as a package.
+
+Then get the docker container id using "docker ps" command and copy the jar file that is compiled inside the docker container.
+
+docker cp target/ds503_bdm-1.0-SNAPSHOT.jar dadc9d47d16e:/home/ds503/
+
+docker container ID: dadc9d47d16e
+
+docker cp dadc9d47d16e:/home/ds503/output/circlenet/taskA D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\output_tasks
+
+
+
+
+
+
