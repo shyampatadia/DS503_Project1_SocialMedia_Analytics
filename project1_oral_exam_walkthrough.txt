@@ -1,0 +1,311 @@
+PROJECT 1 ORAL EXAM WALKTHROUGH (SIMPLE LANGUAGE)
+CircleNet Analytics with Hadoop MapReduce
+
+Why this file exists
+- Help you explain every task in oral exam.
+- Keep full details, but in easy wording.
+- Show where our solution is good and where professor comments are correct.
+
+How to read each task section
+Every task has:
+1) What the task means
+2) Key-value mapping (very important in MapReduce)
+3) Simple solution flow
+4) Optimized solution flow
+5) Why we chose it
+6) Weak points and safer large-scale option
+
+==================================================
+How we "discovered" caching (Distributed Cache)
+==================================================
+Simple story you can tell in oral exam
+- First we built correct solutions using normal reduce-side join.
+- Then we saw some jobs are doing extra shuffle/join just to add small lookup info (nickname, region, count table).
+- So we asked: if lookup table is small, can we copy it to each worker and avoid one full join stage?
+- Hadoop gives this feature: distributed cache.
+- We tested it and it was faster in pseudo-distributed environment.
+
+Why we thought it is useful
+- Fewer jobs in some tasks.
+- Less network shuffle in some stages.
+- Cleaner map-side lookup logic.
+
+Very important limitation
+- This only works well when cached file is small enough for memory.
+- For very large files, this is not scalable.
+- Professor comments are correct where they point this out.
+
+One-line oral answer
+- "We used caching as an optimization after building correct baseline joins. It improved local performance, but we understand its memory limits at cluster scale."
+
+==================================================
+Task A: Frequency of each hobby
+==================================================
+What it means
+- Count how many users have each FavoriteHobby.
+
+Key-value mapping
+- Mapper output: (FavoriteHobby, 1)
+- Reducer output: (FavoriteHobby, totalCount)
+
+Simple solution
+- One job.
+- Mapper reads hobby from page row and emits 1.
+- Reducer sums all 1 values for each hobby.
+
+Optimized solution (YES, implemented)
+- Same logic as simple.
+- Adds combiner with same sum function.
+- Combiner does local partial sum before shuffle.
+
+Why this is good
+- Counting by key is a perfect MapReduce use case.
+- Combiner is safe because sum can be merged in any order.
+
+Weak point
+- No major weak point here. This is already scalable.
+
+==================================================
+Task B: Top 10 most popular pages (ID, NickName, JobTitle)
+==================================================
+What it means
+- Find pages with highest access count in ActivityLog.
+- Then attach page info (nickname, job title).
+
+Key-value mapping
+Simple (3 jobs)
+- Job1 map: (WhatPage, 1)
+- Job1 reduce: (PageID, accessCount)
+- Job2 page map: (PageID, "P,Nick,Job")
+- Job2 count map: (PageID, "C,count")
+- Job2 reduce output: (Null, "count,id,nick,job")
+- Job3 map: (Null, joinedRow)
+- Job3 reduce output: top 10 rows
+
+Optimized (2 jobs)
+- Job1: same counting with combiner
+- Job2 map: (Null, "PageID\tcount")
+- Job2 reducer: keeps top 10 and reads page file from cache to add nick/job
+
+Why we chose this
+- Need counting + join + global top 10.
+- Optimized version removes one full join stage.
+
+Weak point
+- Cache join assumes page file is manageable in memory.
+
+==================================================
+Task C: Users with chosen hobby
+==================================================
+What it means
+- Pick one hobby and return users (NickName, JobTitle) with that hobby.
+
+Key-value mapping (current code)
+- Mapper: (NickName, JobTitle) when hobby matches
+- Reducer: pass-through same output
+
+Best mapping (better design)
+- Map-only output, no reducer needed.
+
+Simple solution
+- Filter rows by FavoriteHobby in mapper.
+- Output nickname and job title.
+
+Optimized solution
+- Not a different algorithm; real optimization is map-only configuration.
+
+Professor comment
+- "Use map-only, remove reducer, set reducers to 0."
+
+Evaluation
+- 100% correct.
+- Current reducer does nothing useful and adds shuffle cost.
+
+Safer/better change
+- Remove reducer class.
+- `setNumReduceTasks(0)`.
+
+==================================================
+Task D: Popularity factor (followers per owner, including zero)
+==================================================
+What it means
+- For every page owner, show nickname and number of followers.
+- Must include owners with zero followers.
+
+Key-value mapping
+Simple
+- Page mapper: (OwnerID, "P,Nick")
+- Follows mapper: (FollowedID, "F,1")
+- Reducer: outputs owner + follower count (0 if no F values)
+
+Optimized
+- Job1 map/reduce: (FollowedID, count)
+- Job2 map-only: read counts from cache, scan pages, output "ID,Nick,countOrZero"
+
+Why we chose this
+- Optimized version avoids full second reduce-side join.
+
+Professor comment
+- Optimized job assumes only one file `part-r-00000`.
+
+Evaluation
+- Correct comment.
+- If job1 has many reducers, we miss data from other part files.
+
+Safer large-scale option
+- Read all `part-r-*` files, or
+- use reduce-side join.
+
+==================================================
+Task E: Total actions + distinct pages per owner
+==================================================
+What it means
+- For each owner ID:
+- total actions they made
+- number of distinct pages they visited
+
+Key-value mapping
+- Owner mapper: (OwnerID, "P,1")
+- Activity mapper: (ByWho, "A,WhatPage")
+- Reducer output: (OwnerID, "totalActions,distinctPages")
+
+Simple solution
+- Use `MultipleInputs`.
+- Reducer counts actions and builds set of distinct page IDs.
+
+Optimized solution
+- In current `src` submission, only simple version is present.
+- (No separate TaskEOptimized source file here.)
+
+Why we chose this
+- One reducer pass computes both outputs together.
+
+Weak point
+- If one user has huge activity, reducer set memory can grow.
+
+==================================================
+Task F: Owners above average follower count
+==================================================
+What it means
+- Find owners with follower count greater than global average.
+
+Key-value mapping
+Simple (3 jobs)
+- Job1 page map: (OwnerID, "P,Nick")
+- Job1 follows map: (FollowedID, "F,1")
+- Job1 reduce output: (Null, "ID,Nick,count")
+- Job2 map: ("avg", count)
+- Job2 reduce output: global average
+- Job3 map: emits rows with count > avg
+- Job3 reduce: pass-through
+
+Optimized (2 jobs)
+- Job1 map/reduce: (FollowedID, followerCount)
+- Driver reads job1 output + pages to compute average
+- Job2 mapper uses cached counts and filters owners above average
+
+Why we chose this
+- Optimized path removes one MR stage.
+
+Professor comment
+- Average assumes one output file.
+
+Evaluation
+- Correct comment.
+- Code reads only `part-r-00000`; multi-reducer output breaks correctness.
+
+Safer large-scale option
+- Aggregate all part files, or
+- compute full average in dedicated MR stage.
+
+==================================================
+Task G: Outdated pages (no access in last 90 days)
+==================================================
+What it means
+- A user is outdated if latest access is older than `globalLatest - 2160` hours.
+- 90 days = 90 x 24 = 2160 hours.
+
+Key-value mapping
+Simple (3 jobs)
+- Job1 map: (Null, ActionTime)
+- Job1 reduce: globalMaxTime
+- Job2 map: (ByWho, ActionTime)
+- Job2 reduce: (UserID, userMaxTime)
+- Job3 page map: (UserID, "P,Nick")
+- Job3 max map: (UserID, "M,userMax")
+- Job3 reduce: output outdated users
+
+Optimized (2 jobs)
+- Job1 map/reduce: (ByWho, userMaxTime)
+- Driver reads job1 output to find global max
+- Job2 mapper uses cached userMax table + threshold and filters pages
+
+Why we chose this
+- Optimized version has fewer jobs.
+
+Professor comment
+- Also assumes one output file.
+
+Evaluation
+- Correct comment.
+- Optimized code reads only `part-r-00000`.
+
+Safer large-scale option
+- Force one reducer intentionally, or
+- compute global max in separate robust MR stage / read all parts.
+
+==================================================
+Task H: Same-region one-way follows (not followed back)
+==================================================
+What it means
+- Find users who follow someone in same region, but that person does not follow back.
+- Output ID and nickname.
+
+Key-value mapping
+Simple (2 jobs)
+- Job1 mapper (cached region map): ("minID,maxID", "A->B")
+- Job1 reducer: if only one direction exists, output (followerID, "F")
+- Job2 follower mapper: (ID, "F")
+- Job2 page mapper: (ID, "P,Nick")
+- Job2 reducer: output (Null, "ID,Nick")
+
+Optimized (1 job)
+- Mapper emits two records per same-region edge:
+- (A, "O,B") outgoing
+- (B, "I,A") incoming
+- Reducer compares outgoing set and incoming set
+- If one-way exists, reducer outputs user with nick (nick loaded from cache)
+
+Why we chose this
+- Tried to merge logic into one job for speed.
+
+Professor comment
+- Full CircleNetPage in distributed cache does not scale.
+
+Evaluation
+- Correct comment.
+- Region + nickname maps are loaded in memory; risky for large table.
+
+Safer large-scale option
+- Use reduce-side joins with CircleNetPage instead of full table cache.
+
+==================================================
+Professor comments summary (final verdict)
+==================================================
+- Task C comment: correct.
+- Task D comment: correct.
+- Task F comment: correct.
+- Task G comment: correct.
+- Task H comment: correct.
+
+Overall honest assessment
+- Your solutions are mostly correct and good for learning/pseudo-distributed runs.
+- Main issues are scalability assumptions, not basic logic errors.
+
+Main risk patterns to remember
+- Using pass-through reducer when map-only is enough.
+- Reading only `part-r-00000` after multi-reducer jobs.
+- Loading full large tables into distributed cache memory.
+
+Best short oral defense
+- "We built correct baseline solutions first. Then we added optimizations like combiner and distributed cache. We now clearly understand where those optimizations help and where they are not scalable." 
