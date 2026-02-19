@@ -1,0 +1,87 @@
+Before this start create the container with following config
+Name of the container: ds503-container
+- 3000 → 22 → SSH
+- 3001 → 4040 → Spark Jobs
+- 3002 → 50070 → Hadoop NameNode Web UI
+- 3003 → 8080 → Spark Master UI
+- 3004 → 8081 → Spark Worker UI
+
+Volume Mount
+- **Container path:** `/home/ds503/data`
+- **Local directory:** D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\dataset_generation\my_output_full
+
+Then run the following command in the local terminal:
+ssh -p 3000 ds503@localhost
+
+If credentials are asked then use below:
+Credentials:
+- Username: `ds503`
+- Password: `ds503`
+
+Then start the HDFS system by using the following command in the terminal where we connected through SSH:
+Hadoop Cluster Setup:
+1. Start Hadoop Cluster - hadoop/sbin/start-all.sh - this will have the UI started at port that we specified earlier.
+2. To test from your local powershell (Not SSH) try the following command to see if the cluster is started or not
+Test-NetConnection -ComputerName hostname -Port 3002
+
+
+3. Creating the directory in HDFS:
+➜  ~ ls
+data_hadoop  derby.log  get-pip.py  hadoop  hive  metastore_db  passwd  pig  shared_folder  spark  testing  tools
+➜  ~ hadoop/bin/hdfs dfs -mkdir /user/ds503
+
+Note 1: Here in the above path /user/<username_present_in_credentials>
+Note 2: here hdfs is the main executable and dfs is the parameter and the sub parameter is -mkdir, its basically a task that DFS can perform.
+
+Then run the below command to create a subdirctory inside the user/ds503 as user/ds503/input:
+Command: hadoop/bin/hdfs dfs -mkdir /user/ds503/input
+Go to URL on your local to verify: http://localhost:3002/explorer.html#/user/ds503/input
+
+Then use the below command to add the files into the HDFS system using the put command into the directory that we just created:
+hadoop/bin/hdfs dfs -put hadoop/etc/hadoop/*.xml /user/ds503/input
+now go check the same URL to see all the xml files loaded: http://localhost:3002/explorer.html#/user/ds503/input
+
+Now we will execute the actual functions that we already have complied in jar file named
+
+Command:
+hadoop/bin/hadoop jar hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.7.jar grep /user/ds503/input /user/ds503/output 'dfs[a-z.]+'
+
+Breakdown of the above code:
+1. we are specifying to hadoop that we are giving you the jar file
+2. In that jar file we have a class named grep you need to use that for taking the mapper and reducer code.
+3. our input files are located at /ds503/input directory in HDFS
+4. the output directory where we want our output stored.
+5. The regex pattern 'dfs[a-z.]+' that RegexMapper will use to search input files—matches any string starting with "dfs" followed by one or more lowercase letters (a-z) or dots (.), like "dfsadmin", "dfs.datanode", "dfs.blockreport", etc.
+
+Extremely Important note:
+Please go through the below link to understand how the code works, and in the above command we have 3 parameters, why? the answer is located in the below file, please look at that.
+https://github.com/apache/hadoop/blob/trunk/hadoop-mapreduce-project/hadoop-mapreduce-examples/src/main/java/org/apache/hadoop/examples/Grep.java
+
+
+Now you should be able to see a new folder in the UI which is /ds503/output
+http://localhost:3002/explorer.html#/user/ds503/output
+
+Below is the code to move the output from HDFS to the container shared_folder, and shared folder is the folder present on our local
+
+Since we used the testing as the folder name on our local we have to use 'testing/output'
+Command: hadoop/bin/hdfs dfs -get /user/ds503/output ~/testing/output
+Command to display the output: cat -n ~/testing/output/*
+
+
+4. Now that all operations are over, we will shut-down the HDFS cluster:
+Command: hadoop/sbin/stop-all.sh
+
+SideCommands:
+
+Trick 1: Copying files from docker to your local machine in command line below are powershell commands:
+Suppose if you want to copy a file from docker container to your local machine then use the following process
+1. Get the docker container id using: docker ps
+2. Using the following command: docker cp <container_id>:<path_to_the_file_in_container_from_home_directory> <path_to_local_directory_where_you_want_your_file_to_be_pasted>
+
+Trick 2: Usually whenever you run a command in dfs there is always a way to verify suppose if you use mkdir with dfs, then below is the command that you can use to inspect if the appropriate directory is created in hdfs or not:
+Command: hadoop/bin/hdfs dfs -ls /
+Above command will list all the directories present in HDFS.
+
+Or you can always visit in your browser: http://localhost:3002/explorer.html#/user/ds503
+
+
