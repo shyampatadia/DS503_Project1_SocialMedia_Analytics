@@ -1,0 +1,68 @@
+==========================================================
+Task 3a
+Execution Date: Sat Feb 28 07:57:21 UTC 2026
+==========================================================
+>>> Executing Task2_2a on Kaggle Data...
+Finished 2_2a. Duration: 2 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2b on Kaggle Data...
+Starting Iteration 1...
+Finished 2_2b. Duration: 2 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2c on Kaggle Data...
+Finished 2_2c. Duration: 2 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2d on Kaggle Data...
+Finished 2_2d. Duration: 2 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2e on Kaggle Data...
+--- Variation (i) Output ---
+Convergence Reached: true
+Finished 2_2e. Duration: 2 seconds.
+----------------------------------------------------------
+==========================================================
+Task 3a
+Execution Date: Sat Feb 28 08:19:52 UTC 2026
+==========================================================
+>>> Executing Task2_2a on Kaggle Data...
+Finished 2_2a. Duration: 2 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2b on Kaggle Data...
+Starting Iteration 1...
+Finished 2_2b. Duration: 1 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2c on Kaggle Data...
+Finished. Convergence reached: true
+Finished 2_2c. Duration: 7 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2d on Kaggle Data...
+Finished 2_2d. Duration: 2 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2e on Kaggle Data...
+--- Variation (i) Output ---
+Convergence Reached: true
+Finished 2_2e. Duration: 1 seconds.
+----------------------------------------------------------
+==========================================================
+Task 3a
+Execution Date: Sat Feb 28 08:21:01 UTC 2026
+==========================================================
+>>> Executing Task2_2a on Kaggle Data...
+Finished 2_2a. Duration: 3 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2b on Kaggle Data...
+Starting Iteration 1...
+Finished 2_2b. Duration: 3 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2c on Kaggle Data...
+Finished. Convergence reached: true
+Finished 2_2c. Duration: 10 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2d on Kaggle Data...
+Finished 2_2d. Duration: 3 seconds.
+----------------------------------------------------------
+>>> Executing Task2_2e on Kaggle Data...
+--- Variation (i) Output ---
+Convergence Reached: true
+Finished 2_2e. Duration: 4 seconds.
+----------------------------------------------------------
