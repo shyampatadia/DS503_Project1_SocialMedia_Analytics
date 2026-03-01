@@ -1,0 +1,19 @@
+Project 2: Apache Pig Implementation Report
+Generated on: Sun Mar  1 03:17:08 UTC 2026
+----------------------------------------------------------
+Task 1a: Grouped users by hobby and counted totals.
+----------------------------------------------------------
+Task 1b: Joined logs and pages to find top 10 most accessed pages.
+----------------------------------------------------------
+Task 1c: Summed activity time per page using GROUP and SUM.
+----------------------------------------------------------
+Task 1d: Extracted unique user IDs using DISTINCT.
+----------------------------------------------------------
+Task 1e: Identified inactive users using LEFT OUTER JOIN and FILTER.
+----------------------------------------------------------
+Task 1g: Counted social relations per target ID.
+----------------------------------------------------------
+Task 1f: Joined Task 1g results with follows to find popular targets (>10).
+----------------------------------------------------------
+Task 1h: Analyzed interest distribution by grouping by hobby.
+----------------------------------------------------------
