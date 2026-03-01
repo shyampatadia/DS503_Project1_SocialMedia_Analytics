@@ -31,7 +31,7 @@ data_hadoop  derby.log  get-pip.py  hadoop  hive  metastore_db  passwd  pig  sha
 ➜  ~ hadoop/bin/hdfs dfs -mkdir /user/ds503
 
 Note 1: Here in the above path /user/<username_present_in_credentials>
-Note 2: here hdfs is the main executable and dfs is the parameter and the sub parameter is -mkdir, its basically a task that DFS can perform.
+Note 2: Here hdfs is the main executable and dfs is the parameter and the sub parameter is -mkdir, its basically a task that DFS can perform.
 
 Then run the below command to create a subdirctory inside the user/ds503 as user/ds503/input:
 Command: hadoop/bin/hdfs dfs -mkdir /user/ds503/input

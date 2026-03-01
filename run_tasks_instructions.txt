@@ -5,7 +5,7 @@ DS503 BDM - Analytics Jobs Run Instructions (Simple + Optimized)
    mvn clean package -DskipTests
 
    Copy JAR into container:
-   docker cp target/ds503_bdm-1.0-SNAPSHOT.jar dadc9d47d16e:/home/ds503/
+   docker cp target/ds503_bdm-1.0-SNAPSHOT.jar 9cd2f8c34775:/home/ds503/
 
    Inside container, set paths:
    export JAR=/home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
@@ -137,14 +137,14 @@ Copy to container local:
   hdfs dfs -get $OUT/taskH/simple $LOCAL_OUT/taskH/
   hdfs dfs -get $OUT/taskH/optimized $LOCAL_OUT/taskH/
 Copy to host:
-  docker cp dadc9d47d16e:/home/ds503/results/taskH ./results_taskH
+  docker cp 22f9a6ab98fe:/home/ds503/results/taskH ./results_taskH
 
 Timing file (single file for all runs)
 View:
   cat $CIRCLENET_TIMING_FILE
   rg ",total," $CIRCLENET_TIMING_FILE
 Copy to host:
-  docker cp dadc9d47d16e:$CIRCLENET_TIMING_FILE ./task_times.csv
+  docker cp 9cd2f8c34775:/home/ds503/task_times.csv ./task_times.csv
 
 Quick compare idea
 Use only rows where phase=total, then compare:
@@ -160,4 +160,4 @@ Correctness check (recommended after each task)
    diff -u /tmp/taskX_simple.txt /tmp/taskX_optimized.txt
 3) If output format is intentionally different (for some tasks), compare key columns only.
 
- docker cp dadc9d47d16e:/home/ds503/results_all/output ./output_all
+docker cp 9cd2f8c34775:/home/ds503/results_all/output ./output_all

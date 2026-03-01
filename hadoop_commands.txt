@@ -96,9 +96,9 @@ Once we write the code for mapper and reducer, on the right hand side we can ope
 
 Then get the docker container id using "docker ps" command and copy the jar file that is compiled inside the docker container.
 
-docker cp target/ds503_bdm-1.0-SNAPSHOT.jar dadc9d47d16e:/home/ds503/
+docker cp target/ds503_bdm-1.0-SNAPSHOT.jar 9cd2f8c34775:/home/ds503/
 
-docker container ID: dadc9d47d16e
+docker container ID: 9cd2f8c34775
 
 docker cp dadc9d47d16e:/home/ds503/output/circlenet/taskA D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\output_tasks
 

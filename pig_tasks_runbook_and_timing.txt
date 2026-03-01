@@ -1,0 +1,165 @@
+PIG TASKS RUNBOOK (Container: 9cd2f8c34775)
+
+Purpose
+- Run Pig implementations for Tasks A-H.
+- Store outputs in HDFS.
+- Capture Pig timings in CSV.
+- Compare Pig timings with existing MapReduce timings.
+
+Files added in this project
+- Pig scripts:
+  - src/main/java/circlenet/taskA/taskA.pig
+  - src/main/java/circlenet/taskB/taskB.pig
+  - src/main/java/circlenet/taskC/taskC.pig
+  - src/main/java/circlenet/taskD/taskD.pig
+  - src/main/java/circlenet/taskE/taskE.pig
+  - src/main/java/circlenet/taskF/taskF.pig
+  - src/main/java/circlenet/taskG/taskG.pig
+  - src/main/java/circlenet/taskH/taskH.pig
+- Helper scripts:
+  - run_pig_tasks_in_container.sh
+  - compare_mr_pig_timings.sh
+
+Important notes before running
+- Task C Pig script is written as map-only style (FILTER + FOREACH + STORE only; no GROUP/JOIN).
+- Task D/F/G/H Pig scripts avoid one-part-output assumptions and use safer relational flow.
+- Task H Pig solution uses joins (no full distributed-cache table loading).
+
+============================================================
+1) Copy Pig scripts and helpers into the container
+============================================================
+From host project root:
+
+1) Copy all Pig scripts (task folders):
+   docker exec 9cd2f8c34775 mkdir -p /home/ds503/pig_scripts
+   docker cp src/main/java/circlenet/taskB 9cd2f8c34775:/home/ds503/pig_scripts/
+   docker cp src/main/java/circlenet/taskA 9cd2f8c34775:/home/ds503/pig_scripts/
+   docker cp src/main/java/circlenet/taskC 9cd2f8c34775:/home/ds503/pig_scripts/
+   docker cp src/main/java/circlenet/taskD 9cd2f8c34775:/home/ds503/pig_scripts/
+   docker cp src/main/java/circlenet/taskE 9cd2f8c34775:/home/ds503/pig_scripts/
+   docker cp src/main/java/circlenet/taskF 9cd2f8c34775:/home/ds503/pig_scripts/
+   docker cp src/main/java/circlenet/taskG 9cd2f8c34775:/home/ds503/pig_scripts/
+   docker cp src/main/java/circlenet/taskH 9cd2f8c34775:/home/ds503/pig_scripts/
+
+2) Copy helper shell scripts:
+   docker cp run_pig_tasks_in_container.sh 9cd2f8c34775:/home/ds503/
+   docker cp compare_mr_pig_timings.sh 9cd2f8c34775:/home/ds503/
+
+3) Make scripts executable:
+   docker exec 9cd2f8c34775 chmod +x /home/ds503/run_pig_tasks_in_container.sh /home/ds503/compare_mr_pig_timings.sh
+
+============================================================
+2) Run all Pig tasks with timing capture
+============================================================
+Open shell in container:
+
+   docker exec -it 9cd2f8c34775 bash
+
+Inside container set input/output paths:
+
+   export PAGES=/circlenet/pages/CircleNetPage.csv
+   export FOLLOWS=/circlenet/follows/Follows.csv
+   export ACTIVITY=/circlenet/activitylog/ActivityLog.csv
+   export PIG_OUT=/circlenet/pig_output
+   export PIG_TIMES=/home/ds503/pig_task_times.csv
+   export HOBBY=PodcastBinging
+
+Optional cleanup before fresh run:
+
+   hdfs dfs -rm -r -f $PIG_OUT/taskA $PIG_OUT/taskB $PIG_OUT/taskC $PIG_OUT/taskD $PIG_OUT/taskE $PIG_OUT/taskF $PIG_OUT/taskG $PIG_OUT/taskH
+   rm -f $PIG_TIMES
+
+Run all Pig tasks (A-H):
+
+   /home/ds503/run_pig_tasks_in_container.sh
+
+What this script does:
+- Runs each task script with `pig -x mapreduce`.
+- Uses HDFS output path `/circlenet/pig_output/taskX`.
+- Measures total elapsed ms per task.
+- Appends to `/home/ds503/pig_task_times.csv` with columns:
+  `timestamp,label,phase,time_ms,time_s,success`
+
+============================================================
+3) Inspect Pig outputs quickly
+============================================================
+Inside container:
+
+   hdfs dfs -ls /circlenet/pig_output/taskA
+   hdfs dfs -cat /circlenet/pig_output/taskA/part-* | head -20
+
+   hdfs dfs -cat /circlenet/pig_output/taskB/part-* | head -20
+   hdfs dfs -cat /circlenet/pig_output/taskC/part-* | head -20
+   hdfs dfs -cat /circlenet/pig_output/taskD/part-* | head -20
+   hdfs dfs -cat /circlenet/pig_output/taskE/part-* | head -20
+   hdfs dfs -cat /circlenet/pig_output/taskF/part-* | head -20
+   hdfs dfs -cat /circlenet/pig_output/taskG/part-* | head -20
+   hdfs dfs -cat /circlenet/pig_output/taskH/part-* | head -20
+
+============================================================
+4) Compare MR vs Pig timings
+============================================================
+Prerequisite:
+- MR timings already available at `/home/ds503/task_times.csv` (your existing file).
+- Pig timings available at `/home/ds503/pig_task_times.csv` after step 2.
+
+Generate comparison CSV:
+
+   /home/ds503/compare_mr_pig_timings.sh
+
+Output file:
+- `/home/ds503/mr_vs_pig_comparison.csv`
+
+CSV columns:
+- task
+- mr_label
+- mr_time_ms
+- pig_label
+- pig_time_ms
+- pig_minus_mr_ms
+
+Interpretation:
+- `pig_minus_mr_ms < 0` means Pig was faster.
+- `pig_minus_mr_ms > 0` means MR was faster.
+
+MR labels currently mapped in comparison script:
+- A -> TaskAOptimized
+- B -> TaskBOptimized
+- C -> TaskCSimple
+- D -> TaskDOptimized
+- E -> TaskESimple
+- F -> TaskFOptimized
+- G -> TaskGOptimized
+- H -> TaskHOptimized
+
+If you want simple-vs-pig comparison for a specific task, edit label mapping in `/home/ds503/compare_mr_pig_timings.sh`.
+
+============================================================
+5) Copy timing and output artifacts back to host
+============================================================
+From host project root:
+
+1) Copy Pig timings:
+   docker cp 9cd2f8c34775:/home/ds503/pig_task_times.csv ./pig_task_times.csv
+
+2) Copy MR vs Pig comparison:
+   docker cp 9cd2f8c34775:/home/ds503/mr_vs_pig_comparison.csv ./mr_vs_pig_comparison.csv
+
+3) Copy Pig outputs from HDFS to container local first:
+   docker exec 9cd2f8c34775 bash -lc 'mkdir -p /home/ds503/results_pig && hdfs dfs -get -f /circlenet/pig_output /home/ds503/results_pig/'
+
+4) Copy local Pig outputs to host:
+   docker cp 9cd2f8c34775:/home/ds503/results_pig/pig_output ./results_pig_output
+
+============================================================
+6) Optional correctness comparison (MR output vs Pig output)
+============================================================
+Inside container example for Task A:
+
+   hdfs dfs -cat /circlenet/output/taskA/optimized/part-* | sort > /tmp/taskA_mr.txt
+   hdfs dfs -cat /circlenet/pig_output/taskA/part-* | sort > /tmp/taskA_pig.txt
+   diff -u /tmp/taskA_mr.txt /tmp/taskA_pig.txt
+
+Do same pattern for each task. If format differs (extra columns/order), compare only common columns after preprocessing.
+
+End of runbook.

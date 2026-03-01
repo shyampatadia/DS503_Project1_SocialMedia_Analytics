@@ -1,0 +1,9 @@
+task,mr_label,mr_time_ms,pig_label,pig_time_ms,pig_minus_mr_ms
+A,TaskAOptimized,1918,TaskAPig,8862,6944
+B,TaskBOptimized,20792,TaskBPig,56963,36171
+C,TaskCSimple,1898,TaskCPig,9049,7151
+D,TaskDOptimized,23226,TaskDPig,55385,32159
+E,TaskESimple,27637,TaskEPig,60410,32773
+F,TaskFOptimized,24831,TaskFPig,67222,42391
+G,TaskGOptimized,20807,TaskGPig,65361,44554
+H,TaskHOptimized,28771,TaskHPig,182531,153760
