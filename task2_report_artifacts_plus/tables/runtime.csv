@@ -1,0 +1,8 @@
+label,time_s,success
+k3_r30_opt,28,1
+k5_r30_opt,42,1
+k8_r30_opt,38,1
+scale100k_basic,27,1
+scale100k_opt,24,1
+scale500k_basic,45,1
+scale500k_opt,30,1

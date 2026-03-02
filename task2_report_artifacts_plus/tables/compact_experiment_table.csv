@@ -1,0 +1,4 @@
+run,k,r,epsilon,sse_epsilon,min_rounds,mode,reducers,converged,rounds_executed,runtime_s,final_sse
+k3_r30_opt,3,30,0.001,1000,5,OPT_CENTERS,3,true,22,28,1.052098743271132E14
+k5_r30_opt,5,30,0.001,1000,5,OPT_CENTERS,4,false,30,42,4.953106069631774E13
+k8_r30_opt,8,30,0.001,1000,5,OPT_CENTERS,4,false,30,38,3.0382373097695832E13

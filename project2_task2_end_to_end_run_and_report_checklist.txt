@@ -1,0 +1,205 @@
+PROJECT 2 TASK 2 - END-TO-END EXECUTION + REPORT ARTIFACT CHECKLIST
+
+Goal
+- Run Task 2.1 and Task 2.2(a-f) end-to-end.
+- Keep commands exact and repeatable.
+- Produce all files needed to analyze correctness, convergence, and performance in the report.
+
+Assumptions
+- Docker container is running.
+- Use your current container id (set once below).
+- Current implementation package used for Task 2 core runs:
+  project2.task2simple.*
+
+============================================================
+0) Set container id once (host shell)
+============================================================
+export CID=9cd2f8c34775
+
+(If your container id changed, replace it above.)
+
+============================================================
+1) Build + copy required files (host)
+============================================================
+cd D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\ds503_bdm
+mvn clean package -DskipTests
+
+docker cp target/ds503_bdm-1.0-SNAPSHOT.jar 9cd2f8c34775:/home/ds503/
+docker cp project2_task2_config.properties 9cd2f8c34775:/home/ds503/
+docker cp run_project2_task2.sh 9cd2f8c34775:/home/ds503/
+docker cp run_project2_task2_clean.sh 9cd2f8c34775:/home/ds503/
+docker exec 9cd2f8c34775 chmod +x /home/ds503/run_project2_task2.sh /home/ds503/run_project2_task2_clean.sh
+
+============================================================
+2) Clean previous run artifacts (inside container)
+============================================================
+docker exec -it $CID bash
+
+/home/ds503/run_project2_task2_clean.sh
+
+# full reset (only if you want to regenerate input too)
+# RESET_INPUT=1 /home/ds503/run_project2_task2_clean.sh
+
+============================================================
+3) Task 2.1 - Generate dataset and seeds (inside container)
+============================================================
+cd /home/ds503
+java -cp ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.DataSeedMain /home/ds503/project2_task2_config.properties
+
+# upload to HDFS
+hdfs dfs -mkdir -p /project2/task2/input
+hdfs dfs -put -f /home/ds503/points_4d.csv /project2/task2/input/
+hdfs dfs -put -f /home/ds503/seeds_k5.csv /project2/task2/input/
+
+# quick sanity checks
+hdfs dfs -count /project2/task2/input/points_4d.csv
+hdfs dfs -cat /project2/task2/input/points_4d.csv | head -5
+hdfs dfs -cat /project2/task2/input/seeds_k5.csv | head -5
+
+============================================================
+4) Task 2.2(a-e) - Run required algorithm variants (inside container)
+============================================================
+export JAR=/home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+export CFG=/home/ds503/project2_task2_config.properties
+export TIMES=/home/ds503/task2_times.csv
+export LOG_DIR=/home/ds503/task2_logs
+
+/home/ds503/run_project2_task2.sh
+
+This runs:
+- 2.2(a) SINGLE
+- 2.2(b) BASIC
+- 2.2(c) EARLY
+- 2.2(d)+2.2(e)(i) OPT_CENTERS
+- 2.2(e)(ii) OPT_POINTS
+
+Quick checks:
+hdfs dfs -cat /project2/task2/output/single/summary.txt
+hdfs dfs -cat /project2/task2/output/basic/summary.txt
+hdfs dfs -cat /project2/task2/output/early/summary.txt
+hdfs dfs -cat /project2/task2/output/opt_centers/summary.txt
+hdfs dfs -cat /project2/task2/output/opt_points/summary.txt
+hdfs dfs -cat /project2/task2/output/opt_centers/final_centers.csv | head -10
+hdfs dfs -cat /project2/task2/output/opt_points/final_points_with_centers/part-* | head -20
+
+============================================================
+5) Task 2.2(f) - Experiments (K and R variations) (inside container)
+============================================================
+
+# 5.1 Create experiment timing file
+echo "timestamp,label,time_ms,time_s,success" > /home/ds503/task2_exp_times.csv
+
+# 5.2 Run matrix for K in {3,5,8} and R in {10,30} using EARLY and OPT_CENTERS
+for K in 3 5 8; do
+  for R in 10 30; do
+    for MODE in EARLY OPT_CENTERS; do
+      OUT=/project2/task2/exp/k${K}_r${R}_${MODE,,}
+      hdfs dfs -rm -r -f "$OUT" >/dev/null 2>&1 || true
+
+      start=$(date +%s%3N)
+      if hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain \
+          /home/ds503/project2_task2_config.properties \
+          mode=$MODE k=$K rounds=$R output.base=$OUT > /home/ds503/task2_logs/exp_k${K}_r${R}_${MODE,,}.log 2>&1; then
+          rc=0
+      else
+          rc=1
+      fi
+      end=$(date +%s%3N)
+      ms=$((end-start))
+      sec=$(awk -v ms="$ms" 'BEGIN{printf "%.3f", ms/1000.0}')
+      ts=$(date -u +"%Y-%m-%dT%H:%M:%S.000")
+      echo "$ts,exp_k${K}_r${R}_${MODE,,},$ms,$sec,$([ $rc -eq 0 ] && echo 1 || echo 0)" >> /home/ds503/task2_exp_times.csv
+
+      hdfs dfs -cat "$OUT/summary.txt" > /home/ds503/task2_logs/exp_k${K}_r${R}_${MODE,,}_summary.txt
+    done
+  done
+done
+
+# 5.3 (Optional but recommended) Add one strict convergence test with higher rounds + practical epsilon
+OUT=/project2/task2/exp/early_k5_r50_eps50
+hdfs dfs -rm -r -f "$OUT" >/dev/null 2>&1 || true
+hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain \
+  /home/ds503/project2_task2_config.properties \
+  mode=EARLY k=5 rounds=50 epsilon=50 output.base=$OUT > /home/ds503/task2_logs/exp_early_k5_r50_eps50.log 2>&1
+hdfs dfs -cat "$OUT/summary.txt" > /home/ds503/task2_logs/exp_early_k5_r50_eps50_summary.txt
+
+============================================================
+6) Collect all artifacts needed for report (host)
+============================================================
+
+# 6.1 Copy timing and logs
+docker cp 9cd2f8c34775:/home/ds503/task2_times.csv ./task2_times.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_exp_times.csv ./task2_exp_times.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_logs ./task2_logs
+
+# 6.2 Copy HDFS outputs (base + experiments)
+docker exec 9cd2f8c34775 bash -lc 'mkdir -p /home/ds503/task2_results && hdfs dfs -get /project2/task2 /home/ds503/task2_results/'
+docker cp 9cd2f8c34775:/home/ds503/task2_results/task2 ./project2_task2_hdfs
+
+# 6.3 Copy input data used
+docker exec 9cd2f8c34775 bash -lc 'mkdir -p /home/ds503/task2_input_local && hdfs dfs -get /project2/task2/input/ /home/ds503/task2_input_local/'
+docker cp 9cd2f8c34775:/home/ds503/task2_input_local ./project2_task2_input
+
+============================================================
+7) Minimum checklist before writing report
+============================================================
+You should have these local files/folders:
+
+A) Input proof
+- project2_task2_input/points_4d.csv
+- project2_task2_input/seeds_k5.csv
+
+B) Required variant outputs (2.2a-e)
+- project2_task2_hdfs/output/single/summary.txt
+- project2_task2_hdfs/output/basic/summary.txt
+- project2_task2_hdfs/output/early/summary.txt
+- project2_task2_hdfs/output/opt_centers/summary.txt
+- project2_task2_hdfs/output/opt_points/summary.txt
+- project2_task2_hdfs/output/opt_centers/final_centers.csv
+- project2_task2_hdfs/output/opt_points/final_points_with_centers/part-*
+
+C) Performance files
+- task2_times.csv
+- task2_exp_times.csv
+- task2_logs/*.log
+
+D) Experiment summaries for 2.2(f)
+- task2_logs/exp_*_summary.txt
+
+============================================================
+8) What I need from you to start final analysis/report writing fast
+============================================================
+Send/confirm these exact items:
+1) task2_times.csv
+2) task2_exp_times.csv
+3) task2_logs folder (especially exp_*_summary.txt)
+4) final centers from key runs (at least k=3,5,8)
+5) one statement on which mode you want to present as best (EARLY vs OPT_CENTERS)
+
+With these, report writing can include:
+- correctness evidence,
+- convergence discussion,
+- K/R experiment findings,
+- performance comparison,
+- and final conclusion for Task 2.
+
+============================================================
+5.2/5.3 Recommended (scripted) way
+============================================================
+To avoid copy-paste errors, use the dedicated script.
+
+On host (copy once):
+- docker cp run_project2_task2_experiments.sh 9cd2f8c34775:/home/ds503/
+- docker exec 9cd2f8c34775 chmod +x /home/ds503/run_project2_task2_experiments.sh
+
+Inside container:
+- /home/ds503/run_project2_task2_experiments.sh
+
+This script runs:
+- Matrix: K={3,5,8}, R={10,30}, MODE={EARLY,OPT_CENTERS}
+- Extra run: EARLY, K=5, R=50, epsilon=50
+
+Outputs generated:
+- /home/ds503/task2_exp_times.csv
+- /home/ds503/task2_logs/exp_*.log
+- /home/ds503/task2_logs/exp_*_summary.txt

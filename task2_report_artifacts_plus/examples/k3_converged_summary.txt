@@ -1,0 +1,12 @@
+mode=OPT_CENTERS
+k=3
+rounds_executed=22
+converged=true
+epsilon=0.001
+sse_epsilon=1000.0
+min_rounds=5
+reducers=3
+used_combiner=true
+stop_rule=shift_or_sse
+final_sse=1.052098743271132E14
+final_centers_path=/project2/task2/runs_report_plus/k3_r30_opt/final_centers.csv

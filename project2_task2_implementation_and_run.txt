@@ -1,0 +1,165 @@
+PROJECT 2 - TASK 2 (SIMPLE VERSION) + RUN GUIDE
+
+What this setup gives you
+- Clean Task 2 code in package: project2.task2simple
+- Config-driven runs (single properties file)
+- Automatic timing CSV
+- Automatic per-run log files
+- Steps to copy final HDFS outputs to local host
+
+Core files
+1) src/main/java/project2/task2simple/Config.java
+2) src/main/java/project2/task2simple/DataSeedMain.java
+3) src/main/java/project2/task2simple/KMeansMain.java
+4) src/main/java/project2/task2simple/Point4D.java
+5) src/main/java/project2/task2simple/SumCountWritable.java
+6) project2_task2_config.properties
+7) run_project2_task2.sh
+
+Task coverage
+- 2.2(a): mode=SINGLE
+- 2.2(b): mode=BASIC
+- 2.2(c): mode=EARLY
+- 2.2(d): mode=OPT_CENTERS (uses combiner + configurable reducers)
+- 2.2(e)(i): final_centers.csv + summary.txt
+- 2.2(e)(ii): mode=OPT_POINTS -> final_points_with_centers
+
+============================================================
+A) Build and copy to container (9cd2f8c34775)
+============================================================
+On host:
+- mvn clean package -DskipTests
+- docker cp target/ds503_bdm-1.0-SNAPSHOT.jar 9cd2f8c34775:/home/ds503/
+- docker cp run_project2_task2.sh 9cd2f8c34775:/home/ds503/
+- docker cp run_project2_task2_clean.sh 9cd2f8c34775:/home/ds503/
+- docker cp project2_task2_config.properties 9cd2f8c34775:/home/ds503/
+- docker exec 9cd2f8c34775 chmod +x /home/ds503/run_project2_task2.sh /home/ds503/run_project2_task2_clean.sh
+
+============================================================
+A1) Clean start before rerun (recommended)
+============================================================
+Inside container:
+- /home/ds503/run_project2_task2_clean.sh
+
+This removes:
+- HDFS output: /project2/task2/output
+- timing csv: /home/ds503/task2_times.csv
+- logs: /home/ds503/task2_logs
+- pulled local result folder: /home/ds503/task2_results
+
+If you want a full reset including input data:
+- RESET_INPUT=1 /home/ds503/run_project2_task2_clean.sh
+
+That also removes:
+- HDFS input: /project2/task2/input
+- local generated files: /home/ds503/points_4d.csv and /home/ds503/seeds_k5.csv
+
+============================================================
+B) Generate Task 2.1 dataset + seeds
+============================================================
+Inside container:
+- docker exec -it 9cd2f8c34775 bash
+- cd /home/ds503
+- java -cp ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.DataSeedMain /home/ds503/project2_task2_config.properties
+
+Upload to HDFS:
+- hdfs dfs -mkdir -p /project2/task2/input
+- hdfs dfs -put -f /home/ds503/points_4d.csv /project2/task2/input/
+- hdfs dfs -put -f /home/ds503/seeds_k5.csv /project2/task2/input/
+
+============================================================
+C) Run all Task 2 variants (2.2a to 2.2e)
+============================================================
+Inside container:
+- export JAR=/home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+- export CFG=/home/ds503/project2_task2_config.properties
+- export TIMES=/home/ds503/task2_times.csv
+- export LOG_DIR=/home/ds503/task2_logs
+- /home/ds503/run_project2_task2.sh
+
+Generated artifacts:
+- Timing CSV: /home/ds503/task2_times.csv
+- Logs:
+  - /home/ds503/task2_logs/Task2_2a_single.log
+  - /home/ds503/task2_logs/Task2_2b_basic.log
+  - /home/ds503/task2_logs/Task2_2c_early.log
+  - /home/ds503/task2_logs/Task2_2d_opt_centers.log
+  - /home/ds503/task2_logs/Task2_2e_opt_points.log
+
+============================================================
+D) Inspect key outputs
+============================================================
+- hdfs dfs -cat /project2/task2/output/opt_centers/summary.txt
+- hdfs dfs -cat /project2/task2/output/opt_centers/final_centers.csv
+- hdfs dfs -ls /project2/task2/output/opt_points/final_points_with_centers
+- hdfs dfs -cat /project2/task2/output/opt_points/final_points_with_centers/part-* | head -20
+
+============================================================
+E) Copy logs + outputs to host (local machine)
+============================================================
+On host:
+1) Copy timing CSV
+- docker cp 9cd2f8c34775:/home/ds503/task2_times.csv ./task2_times.csv
+
+2) Copy logs
+- docker cp 9cd2f8c34775:/home/ds503/task2_logs ./task2_logs
+
+3) Pull HDFS outputs to container local path
+- docker exec 9cd2f8c34775 bash -lc 'mkdir -p /home/ds503/task2_results && hdfs dfs -get /project2/task2/output /home/ds503/task2_results/'
+
+4) Copy output folder to host
+- docker cp 9cd2f8c34775:/home/ds503/task2_results/output ./project2_task2_output
+
+5) Copy Task 2 input dataset to host (points + seeds)
+5.1 Pull HDFS input to container local:
+- docker exec 9cd2f8c34775 bash -lc 'mkdir -p /home/ds503/task2_input_local && hdfs dfs -get /project2/task2/input/* /home/ds503/task2_input_local/'
+
+5.2 Copy input folder to host:
+- docker cp 9cd2f8c34775:/home/ds503/task2_input_local ./project2_task2_input
+
+Alternative (if input files already exist directly in /home/ds503):
+- docker cp 9cd2f8c34775:/home/ds503/points_4d.csv ./points_4d.csv
+- docker cp 9cd2f8c34775:/home/ds503/seeds_k5.csv ./seeds_k5.csv
+
+============================================================
+F) Convergence tuning (for your current case)
+============================================================
+You observed:
+- rounds_executed=10
+- converged=false
+
+This is expected when:
+- max rounds is too small, or
+- epsilon is too strict for your data scale.
+
+Important: your features are not normalized and x goes up to 1,000,000.
+So epsilon=0.001 is usually too strict.
+
+Use this approach:
+1) keep EARLY mode
+2) increase rounds to 30 or 50
+3) increase epsilon to 10, 50, or 100 (start with 50)
+
+One-off run example (no config edit needed):
+- hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain /home/ds503/project2_task2_config.properties mode=EARLY rounds=50 epsilon=50 output.base=/project2/task2/output/early_r50_e50
+
+Check result:
+- hdfs dfs -cat /project2/task2/output/early_r50_e50/summary.txt
+
+============================================================
+G) One-off commands for each mode
+============================================================
+- SINGLE:
+  hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain /home/ds503/project2_task2_config.properties mode=SINGLE output.base=/project2/task2/output/single
+
+- BASIC:
+  hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain /home/ds503/project2_task2_config.properties mode=BASIC output.base=/project2/task2/output/basic
+
+- EARLY:
+  hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain /home/ds503/project2_task2_config.properties mode=EARLY output.base=/project2/task2/output/early
+
+- OPT_CENTERS:
+  hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain /home/ds503/project2_task2_config.properties mode=OPT_CENTERS output.base=/project2/task2/output/opt_centers
+
+- OPT_POINTS:
+  hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain /home/ds503/project2_task2_config.properties mode=OPT_POINTS output.base=/project2/task2/output/opt_points

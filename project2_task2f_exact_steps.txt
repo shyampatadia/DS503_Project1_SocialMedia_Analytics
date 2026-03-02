@@ -1,0 +1,143 @@
+Project 2 - Task 2(f) Exact Steps (A-F experiments and analysis evidence)
+
+Purpose:
+- Complete Task 2(f): describe the 5 solutions, run experiments with different K and R,
+  compare performance, and analyze findings with proof files.
+
+Assumptions:
+- Docker container id: 22f9a6ab98fe
+- Jar already built: /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+- Config exists: /home/ds503/project2_task2_config.properties
+- Experiment script exists: /home/ds503/run_project2_task2_experiments.sh
+
+------------------------------------------------------------
+1) Open shell inside container
+------------------------------------------------------------
+docker exec -it 22f9a6ab98fe bash
+
+cd /home/ds503
+
+------------------------------------------------------------
+2) Clean old experiment outputs (safe cleanup for Task 2 exp only)
+------------------------------------------------------------
+hdfs dfs -rm -r -f /project2/task2/exp || true
+rm -f /home/ds503/task2_exp_times.csv || true
+rm -rf /home/ds503/task2_logs/task2_logs || true
+mkdir -p /home/ds503/task2_logs/task2_logs
+
+------------------------------------------------------------
+3) Run the full experiment matrix for Task 2(f)
+------------------------------------------------------------
+chmod +x /home/ds503/run_project2_task2_experiments.sh
+/home/ds503/run_project2_task2_experiments.sh
+
+What this runs:
+- K in {3,5,8}
+- R in {10,30}
+- MODE in {EARLY, OPT_CENTERS}
+- Plus one extra run: EARLY, K=5, R=50, epsilon=50
+
+------------------------------------------------------------
+4) Validate that timing file is properly populated
+------------------------------------------------------------
+wc -l /home/ds503/task2_exp_times.csv
+cat /home/ds503/task2_exp_times.csv
+
+Expected:
+- 14 lines total (1 header + 13 runs)
+- If less than 14, rerun step 3.
+
+------------------------------------------------------------
+5) Build a convergence summary CSV from run summaries
+------------------------------------------------------------
+cat > /home/ds503/task2_convergence.csv << 'EOF'
+label,mode,k,rounds_executed,converged,epsilon,reducers,used_combiner
+EOF
+
+for f in /home/ds503/task2_logs/task2_logs/exp_*_summary.txt; do
+  label=$(basename "$f" _summary.txt)
+  mode=$(grep '^mode=' "$f" | cut -d= -f2)
+  k=$(grep '^k=' "$f" | cut -d= -f2)
+  rounds=$(grep '^rounds_executed=' "$f" | cut -d= -f2)
+  conv=$(grep '^converged=' "$f" | cut -d= -f2)
+  eps=$(grep '^epsilon=' "$f" | cut -d= -f2)
+  red=$(grep '^reducers=' "$f" | cut -d= -f2)
+  comb=$(grep '^used_combiner=' "$f" | cut -d= -f2)
+  echo "$label,$mode,$k,$rounds,$conv,$eps,$red,$comb" >> /home/ds503/task2_convergence.csv
+done
+
+cat /home/ds503/task2_convergence.csv
+
+------------------------------------------------------------
+6) Export final centers for key K values (k=3,5,8)
+------------------------------------------------------------
+mkdir -p /home/ds503/task2_report_artifacts/centers
+
+# pick OPT_CENTERS, R=30 as representative key runs
+hdfs dfs -cat /project2/task2/exp/k3_r30_opt_centers/final_centers.csv > /home/ds503/task2_report_artifacts/centers/k3_r30_opt_centers_final_centers.csv
+hdfs dfs -cat /project2/task2/exp/k5_r30_opt_centers/final_centers.csv > /home/ds503/task2_report_artifacts/centers/k5_r30_opt_centers_final_centers.csv
+hdfs dfs -cat /project2/task2/exp/k8_r30_opt_centers/final_centers.csv > /home/ds503/task2_report_artifacts/centers/k8_r30_opt_centers_final_centers.csv
+
+ls -lh /home/ds503/task2_report_artifacts/centers
+
+------------------------------------------------------------
+7) Create one merged table for report (performance + convergence)
+------------------------------------------------------------
+# This joins by label and keeps report writing easy.
+cat > /home/ds503/task2_report_table.csv << 'EOF'
+label,mode,k,runtime_s,rounds_executed,converged,epsilon,reducers,used_combiner
+EOF
+
+tail -n +2 /home/ds503/task2_exp_times.csv | while IFS=, read -r ts label ms sec success; do
+  row=$(grep "^${label}," /home/ds503/task2_convergence.csv || true)
+  if [ -n "$row" ]; then
+    mode=$(echo "$row" | cut -d, -f2)
+    k=$(echo "$row" | cut -d, -f3)
+    rounds=$(echo "$row" | cut -d, -f4)
+    conv=$(echo "$row" | cut -d, -f5)
+    eps=$(echo "$row" | cut -d, -f6)
+    red=$(echo "$row" | cut -d, -f7)
+    comb=$(echo "$row" | cut -d, -f8)
+    echo "$label,$mode,$k,$sec,$rounds,$conv,$eps,$red,$comb" >> /home/ds503/task2_report_table.csv
+  fi
+done
+
+cat /home/ds503/task2_report_table.csv
+
+------------------------------------------------------------
+8) Copy all report artifacts to local machine
+------------------------------------------------------------
+exit
+
+mkdir -p task2_report_artifacts
+
+docker cp 9cd2f8c34775:/home/ds503/task2_exp.csv ./task2_report_artifacts/task2_exp.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_convergence.csv ./task2_report_artifacts/task2_convergence.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_report_table.csv ./task2_report_artifacts/task2_report_table.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_logs/task2_logs ./task2_report_artifacts/task2_logs
+docker cp 9cd2f8c34775:/home/ds503/task2_report_artifacts/centers ./task2_report_artifacts/centers
+
+
+docker cp 9cd2f8c34775:/home/ds503/task2_times.csv ./task2_report_artifacts/task2_times.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_convergence.csv ./task2_report_artifact/task2_convergence.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_report_table.csv ./task2_report_artifact/task2_report_table.csv
+docker cp 9cd2f8c34775:/home/ds503/task2_logs ./task2_report_artifact/task2_logs
+------------------------------------------------------------
+9) What to write in Task 2(f) report section
+------------------------------------------------------------
+Use:
+1) task2_report_table.csv
+2) task2_exp_times.csv
+3) task2_logs/exp_*_summary.txt
+4) centers for k=3,5,8
+
+Write these points:
+- How runtime changes with K and R.
+- EARLY vs OPT_CENTERS relative runtime.
+- Convergence status from summaries (state truthfully if false).
+- How centers differ when K=3 vs 5 vs 8 (cluster granularity).
+- Best mode decision with evidence (example: OPT_CENTERS for speed + combiner).
+
+Important:
+- If convergence is mostly false, still valid for Task 2(f). Just analyze why:
+  strict epsilon, limited rounds, initialization sensitivity, data scale.

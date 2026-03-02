@@ -1,0 +1,316 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{longtable}
+\usepackage{booktabs}
+
+\lstdefinestyle{code}{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    columns=fullflexible
+}
+
+\title{DS503 Project 2 -- Advanced Hadoop}
+\author{
+    Shyam Patadia \and Vansh Patel \and Nischal Patel\\[4pt]
+}
+\date{\today}
+
+\begin{document}
+    \maketitle
+
+    \section{Task 1: Pig Implementation}
+    For Project 2 Task 1, We rewrote Project 1 analytics Tasks A--H in Apache Pig and tested them on the same CircleNet dataset from Project 1.
+    The Pig scripts are saved inside the same task folders used for the Java MapReduce code:
+    \begin{itemize}
+        \item \texttt{src/main/java/circlenet/taskA/taskA.pig}
+        \item \texttt{src/main/java/circlenet/taskB/taskB.pig}
+        \item \texttt{src/main/java/circlenet/taskC/taskC.pig}
+        \item \texttt{src/main/java/circlenet/taskD/taskD.pig}
+        \item \texttt{src/main/java/circlenet/taskE/taskE.pig}
+        \item \texttt{src/main/java/circlenet/taskF/taskF.pig}
+        \item \texttt{src/main/java/circlenet/taskG/taskG.pig}
+        \item \texttt{src/main/java/circlenet/taskH/taskH.pig}
+    \end{itemize}
+
+    We also recorded Pig timing in \texttt{pig\_task\_times.csv} and compared against the best MapReduce timings from Project 1 using \texttt{mr\_vs\_pig\_comparison.csv}.
+
+    \subsection{Implementation Summary by Task (A--H)}
+
+    \subsubsection*{Task A -- Frequency of FavoriteHobby}
+    \textbf{Pig idea:} load pages, keep hobby field, group by hobby, count.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Loaded CircleNetPage with full schema.
+        \item Created a cleaned hobby relation using \texttt{TRIM(...)} and removed null/empty hobby values.
+        \item Grouped by hobby and counted rows in each group.
+    \end{itemize}
+
+    \textbf{Why this design:}
+    This is a direct aggregation task. Pig handles it naturally with \texttt{GROUP + COUNT}.
+
+    \subsubsection*{Task B -- Top 10 Most Accessed Pages}
+    \textbf{Pig idea:} count accesses per page, join with page metadata, sort by count descending, limit 10.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Loaded ActivityLog and counted \texttt{whatpage} frequency.
+        \item Joined counts with CircleNetPage (ID, nickname, job title).
+        \item Ordered by access count descending and applied \texttt{LIMIT 10}.
+    \end{itemize}
+
+    \textbf{Why this design:}
+    The task needs both aggregation and join. Pig relational operators make this concise and readable.
+
+    \subsubsection*{Task C -- Users with a Chosen Hobby}
+    \textbf{Pig idea:} filter only; no group and no join.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Loaded pages.
+        \item Filtered by hobby parameter \texttt{\$HOBBY} (case-insensitive).
+        \item Projected only nickname and jobtitle.
+    \end{itemize}
+
+    \textbf{Important note from Project 1 comment:}
+    In MapReduce this should be map-only. In Pig, this script is also filter/projection style with no explicit reduce-style grouping stage, which matches that idea.
+
+    \subsubsection*{Task D -- Popularity Factor (followers per owner, including zero)}
+    \textbf{Pig idea:} compute follower counts by followed user (ID2), then left join with all page owners.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Built owner list from CircleNetPage.
+        \item Grouped follows by \texttt{id2} and counted followers.
+        \item Left-outer joined owners with counts and replaced null with zero.
+    \end{itemize}
+
+    \textbf{Why this design:}
+    This keeps all owners, including owners with no followers, and avoids the single-cache-file assumption noted in Project 1 feedback.
+
+    \subsubsection*{Task E -- Total Actions and Distinct Pages Accessed}
+    \textbf{Pig idea:} group actions by user, count total events, and count distinct pages.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Grouped ActivityLog by \texttt{bywho}.
+        \item Used \texttt{COUNT(actions)} for total actions.
+        \item Used \texttt{DISTINCT actions.page\_id} then \texttt{COUNT(...)} for distinct pages.
+        \item Left joined with full owners list so all page owners appear.
+    \end{itemize}
+
+    \textbf{Why this design:}
+    Pig nested block in \texttt{FOREACH ... \{ ... \}} is a clean way to compute both metrics together.
+
+    \subsubsection*{Task F -- Owners Above Average Follower Count}
+    \textbf{Pig idea:} compute owner follower counts (with zero-filled owners), compute global average, then filter owners above average.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Reused owner follower count flow from Task D.
+        \item Computed global average using \texttt{GROUP ... ALL} + \texttt{AVG(...)}.
+        \item Used \texttt{CROSS} to attach average to each owner and filtered \texttt{followers > avg}.
+    \end{itemize}
+
+    \textbf{Why this design:}
+    This avoids reading a single reducer part file manually and keeps average calculation in Pig pipeline logic.
+
+    \subsubsection*{Task G -- Outdated Pages (No Access in Last 90 Days)}
+    \textbf{Pig idea:} compute per-user latest activity and global latest activity, then compare against threshold \texttt{global\_max - 2160}.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Built per-user max action time with \texttt{GROUP by user} + \texttt{MAX}.
+        \item Built global max action time with \texttt{GROUP ALL} + \texttt{MAX}.
+        \item Left joined users to per-user max and crossed with global max.
+        \item Filtered users with null last-time or older-than-threshold last-time.
+    \end{itemize}
+
+    \textbf{Why this design:}
+    Everything stays in relational flow and does not depend on one output part file.
+
+    \subsubsection*{Task H -- Same-Region One-Way Follows (Not Followed Back)}
+    \textbf{Pig idea:} join follows with region table for both source and destination, keep same-region edges, detect non-reciprocal edges, then attach nickname.
+
+    \textbf{How We implemented it:}
+    \begin{itemize}
+        \item Joined follows with page-region table on source and destination.
+        \item Filtered only same-region edges and removed self loops.
+        \item Built reversed edge relation and left-outer joined to detect missing reverse edges.
+        \item Selected unique source users and joined with page table for nickname.
+    \end{itemize}
+
+    \textbf{Why this design:}
+    We used reduce-side relational joins instead of loading all pages into memory cache, which directly addresses the scalability concern from Project 1 feedback.
+
+    \subsection{Timing Results: Pig vs MapReduce}
+    We compared Pig total runtime with the best MapReduce runtime used in Project 1 for each task.
+
+    \begin{longtable}{@{}lrrrr@{}}
+        \toprule
+        Task & MR time (ms) & Pig time (ms) & Difference (Pig-MR, ms) & Pig/MR ratio \\
+        \midrule
+        A & 1918 & 8862 & 6944 & 4.62 \\
+        B & 20792 & 56963 & 36171 & 2.74 \\
+        C & 1898 & 9049 & 7151 & 4.77 \\
+        D & 23226 & 55385 & 32159 & 2.38 \\
+        E & 27637 & 60410 & 32773 & 2.19 \\
+        F & 24831 & 67222 & 42391 & 2.71 \\
+        G & 20807 & 65361 & 44554 & 3.14 \\
+        H & 28771 & 182531 & 153760 & 6.34 \\
+        \bottomrule
+    \end{longtable}
+
+    \textbf{Observation:}
+    On this setup, all Pig jobs were slower than the best MapReduce versions. The largest gap was Task H.
+
+    \subsection{Trade-off Discussion: Apache Pig vs Standard MapReduce}
+
+    \subsubsection*{Where Pig helped}
+    \begin{itemize}
+        \item Much faster development for relational tasks (load/filter/group/join/order).
+        \item Scripts are shorter and easier to read than Java MapReduce jobs.
+        \item Good for iteration and analytics workflow where readability is important.
+    \end{itemize}
+
+    \subsubsection*{Where MapReduce helped}
+    \begin{itemize}
+        \item Better performance in this project after optimization.
+        \item Finer control over execution details (combiner use, map-only design, stage control).
+        \item Easier to tune task-specific logic for runtime improvement.
+    \end{itemize}
+
+    \section{Task 2: K-means with Hadoop MapReduce}
+    For Task 2, we implemented K-means in Java MapReduce using one main driver (\texttt{KMeansMain}) and mode-based behavior. We kept the code structure simple: same core mapper/reducer logic, different iteration control and output strategy by mode.
+
+    \subsection{What We Implemented (2a--2e)}
+    {\small
+    \begin{longtable}{@{}p{0.25\linewidth}p{0.14\linewidth}p{0.27\linewidth}p{0.24\linewidth}@{}}
+        \toprule
+        Requirement & Mode & What changes & Main output \\
+        \midrule
+        2(a) Single iteration & \texttt{SINGLE} & Force \(R=1\) & centers + summary \\
+        2(b) Basic multi-iteration & \texttt{BASIC} & Run fixed \(R\), no early stop & centers + summary \\
+        2(c) Early stop & \texttt{EARLY} & Stop by threshold (\texttt{epsilon}/\texttt{sse.epsilon}) & centers + summary \\
+        2(d) Optimized MR & \texttt{OPT\_CENTERS} & Combiner enabled & centers + summary \\
+        2(e)(ii) Points output & \texttt{OPT\_POINTS} & Final assignment job & centers + points with cluster \\
+        \bottomrule
+    \end{longtable}
+    \normalsize}
+
+    Mapper/reducer behavior is the same base across modes: mapper assigns each point to nearest center, reducer recomputes centers by averaging assigned points. In optimized modes we enable the combiner to reduce shuffle data.
+
+    \subsection{Experiments and Findings (2f)}
+    We ran the experiments in three passes:
+    \begin{itemize}
+        \item Baseline mode checks (\texttt{SINGLE}, \texttt{BASIC}, \texttt{EARLY}, \texttt{OPT\_CENTERS}, \texttt{OPT\_POINTS})
+        \item K/R matrix for runtime comparison (\(K \in \{3,5,8\}\), \(R \in \{10,30\}\), EARLY vs OPT\_CENTERS)
+        \item Corrected true-K SSE runs with matching seed files (\texttt{seeds\_k3}, \texttt{seeds\_k5}, \texttt{seeds\_k8})
+    \end{itemize}
+
+    \subsubsection*{Runtime Matrix (EARLY vs OPT\_CENTERS)}
+    From \texttt{task2\_report\_artifacts\_scalable/task2\_times\_scalable.csv}:
+    \begin{longtable}{@{}lrr@{}}
+        \toprule
+        Setting & EARLY (s) & OPT\_CENTERS (s) \\
+        \midrule
+        K=3, R=10 & 15 & 15 \\
+        K=3, R=30 & 42 & 40 \\
+        K=5, R=10 & 13 & 14 \\
+        K=5, R=30 & 39 & 38 \\
+        K=8, R=10 & 14 & 13 \\
+        K=8, R=30 & 37 & 36 \\
+        \bottomrule
+    \end{longtable}
+    Average runtime over 12 individual runs (6 settings \(\times\) 2 modes):
+    \begin{itemize}
+        \item EARLY: \(26.667\) s
+        \item OPT\_CENTERS: \(26.000\) s
+    \end{itemize}
+
+    \subsubsection*{Compact Run Summary}
+    From \texttt{task2\_report\_artifacts\_plus/tables/compact\_experiment\_table.csv}:
+    \begin{longtable}{@{}lrrrrrr@{}}
+        \toprule
+        Run & K & R & Converged & Rounds executed & Time (s) & Final SSE \\
+        \midrule
+        k3\_r30\_opt & 3 & 30 & true & 22 & 28 & \(1.0521\times10^{14}\) \\
+        k5\_r30\_opt & 5 & 30 & false & 30 & 42 & \(4.9531\times10^{13}\) \\
+        k8\_r30\_opt & 8 & 30 & false & 30 & 38 & \(3.0382\times10^{13}\) \\
+        \bottomrule
+    \end{longtable}
+
+    \subsubsection*{All Required Variants Executed}
+    {\small
+    \begin{longtable}{@{}p{0.16\linewidth}p{0.26\linewidth}p{0.50\linewidth}@{}}
+        \toprule
+        Requirement & Example run & Evidence file \\
+        \midrule
+        2(a) & \texttt{single\_k5\_r1} & \texttt{single\_k5\_r1/summary.txt} \\
+        2(b) & \texttt{basic\_k5\_r10} & \texttt{basic\_k5\_r10/summary.txt} \\
+        2(c) & \texttt{early\_k5\_r30} & \texttt{early\_k5\_r30/summary.txt} \\
+        2(d)+2(e)(i) & \texttt{opt\_centers\_k5\_r30} & \texttt{opt\_centers\_k5\_r30/final\_centers.csv} \\
+        2(e)(ii) & \texttt{opt\_points\_k5\_r30} & \texttt{opt\_points\_k5\_r30/final\_points\_with\_centers} \\
+        \bottomrule
+    \end{longtable}
+    \normalsize}
+
+    \subsubsection*{SSE and Convergence}
+    We used two types of evidence:
+    \begin{itemize}
+        \item \texttt{summary.txt}: final SSE, converged flag, rounds executed
+        \item \texttt{metrics.csv}: per-iteration shift, SSE, delta\_SSE
+    \end{itemize}
+    This made it clear that the algorithm is working even when a run does not hit convergence within the round budget.
+
+    Baseline SSE trend (K=5) from our previous runs:
+    \begin{itemize}
+        \item SINGLE (R=1): \(8.0020\times10^{13}\)
+        \item BASIC (R=10): \(5.0990\times10^{13}\)
+        \item OPT\_CENTERS (R=30): \(4.9431\times10^{13}\)
+    \end{itemize}
+    So the objective keeps improving with more rounds.
+
+    \subsubsection*{K-wise SSE (Corrected Runs)}
+    After fixing seed alignment (K uses matching seed file), final SSE at \(R=30\) was:
+    \begin{longtable}{@{}lr@{}}
+        \toprule
+        K & Final SSE \\
+        \midrule
+        3 & \(1.0521\times10^{14}\) \\
+        5 & \(4.9531\times10^{13}\) \\
+        8 & \(3.0382\times10^{13}\) \\
+        \bottomrule
+    \end{longtable}
+    These values come from \texttt{task2\_report\_artifacts\_truek/k\_vs\_sse\_true.csv}.
+
+    \subsubsection*{Start Seeds and Final Centers}
+    We also added direct input-to-output examples:
+    \begin{itemize}
+        \item K=3: \texttt{k3\_start\_seeds.csv} \(\rightarrow\) \texttt{k3\_final\_centers.csv}
+        \item K=8: \texttt{k8\_start\_seeds.csv} \(\rightarrow\) \texttt{k8\_final\_centers.csv}
+    \end{itemize}
+    This gives a concrete view of how clusters moved from initial seeds to final centers.
+
+    \subsubsection*{Scaling Check (BASIC vs OPT\_CENTERS)}
+    From \texttt{task2\_report\_artifacts\_plus/tables/scaling\_table.csv}:
+    \begin{longtable}{@{}lrr@{}}
+        \toprule
+        Data size & BASIC time (s) & OPT\_CENTERS time (s) \\
+        \midrule
+        100,000 points & 27 & 24 \\
+        500,000 points & 45 & 30 \\
+        \bottomrule
+    \end{longtable}
+    In our runs with larger input size, the optimized mode (\texttt{OPT\_CENTERS}) was faster. The main reason is that the combiner does local partial aggregation before shuffle, so less intermediate data is transferred to reducers.
+
+    \subsubsection*{Team Conclusion}
+    Based on our experiments, \texttt{OPT\_CENTERS} was the most practical default for this project setup. It includes combiner optimization, gives compact output (\texttt{final\_centers.csv} + \texttt{summary.txt}), and remained competitive in runtime across the tested settings. We also learned that matching \(K\) with the seed file is important for valid K-wise SSE comparison.
+\end{document}

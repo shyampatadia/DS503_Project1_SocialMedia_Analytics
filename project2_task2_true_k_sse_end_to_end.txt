@@ -1,0 +1,179 @@
+﻿Project 2 Task 2 - True K-wise SSE (No K/Seed Mismatch) End-to-End Instructions
+
+Purpose:
+- Run valid K-means experiments for K={3,5,8} where each run uses matching seeds.input.
+- Remove the earlier loophole where all runs used seeds_k5.csv.
+- Produce clean artifacts for report update.
+
+Environment:
+- Host project path: D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\ds503_bdm
+- Docker container id: 9cd2f8c34775
+- Hadoop jobs run inside Docker.
+
+====================================================================
+A) Build and copy jar/config from HOST to Docker
+====================================================================
+1) On host (PowerShell):
+cd D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\ds503_bdm
+mvn -DskipTests clean package
+
+2) Copy files to container:
+docker cp target/ds503_bdm-1.0-SNAPSHOT.jar 9cd2f8c34775:/home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+docker cp project2_task2_config.properties 9cd2f8c34775:/home/ds503/project2_task2_config.properties
+
+====================================================================
+B) Open Docker and preflight checks
+====================================================================
+On host:
+docker exec -it 9cd2f8c34775 bash
+
+Inside Docker:
+which hadoop
+which hdfs
+ls -lh /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+ls -lh /home/ds503/project2_task2_config.properties
+hdfs dfs -ls /project2/task2/input/points_4d.csv
+
+If any check fails, stop and fix before continuing.
+
+====================================================================
+C) Clean old outputs/artifacts for this run
+====================================================================
+Inside Docker:
+hdfs dfs -rm -r -f /project2/task2/runs_true_k || true
+hdfs dfs -rm -r -f /project2/task2/input/seeds_k3.csv || true
+hdfs dfs -rm -r -f /project2/task2/input/seeds_k5.csv || true
+hdfs dfs -rm -r -f /project2/task2/input/seeds_k8.csv || true
+rm -rf /home/ds503/task2_truek_artifacts || true
+mkdir -p /home/ds503/task2_truek_artifacts/logs
+
+====================================================================
+D) Generate K-specific seed files from the SAME points dataset
+====================================================================
+Inside Docker:
+# Pull source points once to local for deterministic seed creation
+hdfs dfs -cat /project2/task2/input/points_4d.csv > /home/ds503/task2_truek_artifacts/points_4d.csv
+
+# Create seeds_k3.csv (first 3 points, ids 0..2)
+awk -F',' 'NR<=3 {printf "%d,%s\n", NR-1, $0}' /home/ds503/task2_truek_artifacts/points_4d.csv > /home/ds503/task2_truek_artifacts/seeds_k3.csv
+
+# Create seeds_k5.csv (first 5 points, ids 0..4)
+awk -F',' 'NR<=5 {printf "%d,%s\n", NR-1, $0}' /home/ds503/task2_truek_artifacts/points_4d.csv > /home/ds503/task2_truek_artifacts/seeds_k5.csv
+
+# Create seeds_k8.csv (first 8 points, ids 0..7)
+awk -F',' 'NR<=8 {printf "%d,%s\n", NR-1, $0}' /home/ds503/task2_truek_artifacts/points_4d.csv > /home/ds503/task2_truek_artifacts/seeds_k8.csv
+
+# Validate seed line counts BEFORE upload
+wc -l /home/ds503/task2_truek_artifacts/seeds_k3.csv
+wc -l /home/ds503/task2_truek_artifacts/seeds_k5.csv
+wc -l /home/ds503/task2_truek_artifacts/seeds_k8.csv
+
+# Upload to HDFS
+hdfs dfs -put /home/ds503/task2_truek_artifacts/seeds_k3.csv /project2/task2/input/seeds_k3.csv
+hdfs dfs -put /home/ds503/task2_truek_artifacts/seeds_k5.csv /project2/task2/input/seeds_k5.csv
+hdfs dfs -put /home/ds503/task2_truek_artifacts/seeds_k8.csv /project2/task2/input/seeds_k8.csv
+
+# Validate HDFS seed line counts (must be 3,5,8)
+hdfs dfs -cat /project2/task2/input/seeds_k3.csv | wc -l
+hdfs dfs -cat /project2/task2/input/seeds_k5.csv | wc -l
+hdfs dfs -cat /project2/task2/input/seeds_k8.csv | wc -l
+
+====================================================================
+E) Run valid K-wise experiments (OPT_CENTERS, R=30)
+====================================================================
+Inside Docker:
+# K=3 with seeds_k3.csv
+hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain \
+/home/ds503/project2_task2_config.properties \
+mode=OPT_CENTERS k=3 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=3 \
+seeds.input=/project2/task2/input/seeds_k3.csv \
+output.base=/project2/task2/runs_true_k/k3_r30_opt_centers \
+> /home/ds503/task2_truek_artifacts/logs/k3_r30_opt_centers.log 2>&1
+
+# K=5 with seeds_k5.csv
+hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain \
+/home/ds503/project2_task2_config.properties \
+mode=OPT_CENTERS k=5 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 \
+seeds.input=/project2/task2/input/seeds_k5.csv \
+output.base=/project2/task2/runs_true_k/k5_r30_opt_centers \
+> /home/ds503/task2_truek_artifacts/logs/k5_r30_opt_centers.log 2>&1
+
+# K=8 with seeds_k8.csv
+hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain \
+/home/ds503/project2_task2_config.properties \
+mode=OPT_CENTERS k=8 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 \
+seeds.input=/project2/task2/input/seeds_k8.csv \
+output.base=/project2/task2/runs_true_k/k8_r30_opt_centers \
+> /home/ds503/task2_truek_artifacts/logs/k8_r30_opt_centers.log 2>&1
+
+====================================================================
+F) Hard validation (prevents the old loophole)
+====================================================================
+Inside Docker:
+# 1) summary k value must match each run
+hdfs dfs -cat /project2/task2/runs_true_k/k3_r30_opt_centers/summary.txt | grep '^k='
+hdfs dfs -cat /project2/task2/runs_true_k/k5_r30_opt_centers/summary.txt | grep '^k='
+hdfs dfs -cat /project2/task2/runs_true_k/k8_r30_opt_centers/summary.txt | grep '^k='
+
+# 2) final_centers line count must match K (3,5,8)
+hdfs dfs -cat /project2/task2/runs_true_k/k3_r30_opt_centers/final_centers.csv | wc -l
+hdfs dfs -cat /project2/task2/runs_true_k/k5_r30_opt_centers/final_centers.csv | wc -l
+hdfs dfs -cat /project2/task2/runs_true_k/k8_r30_opt_centers/final_centers.csv | wc -l
+
+# 3) extract final_sse
+hdfs dfs -cat /project2/task2/runs_true_k/k3_r30_opt_centers/summary.txt | grep '^final_sse='
+hdfs dfs -cat /project2/task2/runs_true_k/k5_r30_opt_centers/summary.txt | grep '^final_sse='
+hdfs dfs -cat /project2/task2/runs_true_k/k8_r30_opt_centers/summary.txt | grep '^final_sse='
+
+====================================================================
+G) Build one clean K-vs-SSE CSV for report
+====================================================================
+Inside Docker:
+echo "k,final_sse" > /home/ds503/task2_truek_artifacts/k_vs_sse_true.csv
+
+echo "3,$(hdfs dfs -cat /project2/task2/runs_true_k/k3_r30_opt_centers/summary.txt | sed -n 's/^final_sse=//p')" >> /home/ds503/task2_truek_artifacts/k_vs_sse_true.csv
+
+echo "5,$(hdfs dfs -cat /project2/task2/runs_true_k/k5_r30_opt_centers/summary.txt | sed -n 's/^final_sse=//p')" >> /home/ds503/task2_truek_artifacts/k_vs_sse_true.csv
+
+echo "8,$(hdfs dfs -cat /project2/task2/runs_true_k/k8_r30_opt_centers/summary.txt | sed -n 's/^final_sse=//p')" >> /home/ds503/task2_truek_artifacts/k_vs_sse_true.csv
+
+cat /home/ds503/task2_truek_artifacts/k_vs_sse_true.csv
+
+====================================================================
+H) Collect artifacts inside Docker
+====================================================================
+Inside Docker:
+mkdir -p /home/ds503/task2_truek_artifacts/outputs
+
+hdfs dfs -get /project2/task2/runs_true_k /home/ds503/task2_truek_artifacts/outputs/
+cp /home/ds503/task2_truek_artifacts/seeds_k3.csv /home/ds503/task2_truek_artifacts/outputs/
+cp /home/ds503/task2_truek_artifacts/seeds_k5.csv /home/ds503/task2_truek_artifacts/outputs/
+cp /home/ds503/task2_truek_artifacts/seeds_k8.csv /home/ds503/task2_truek_artifacts/outputs/
+
+====================================================================
+I) Copy final artifacts back to HOST
+====================================================================
+Inside Docker:
+exit
+
+On host (PowerShell):
+mkdir task2_report_artifacts_truek -Force
+docker cp 9cd2f8c34775:/home/ds503/task2_truek_artifacts/. ./task2_report_artifacts_truek/
+
+====================================================================
+J) What to send for report update
+====================================================================
+Host folder: ./task2_report_artifacts_truek
+Required files:
+1) k_vs_sse_true.csv
+2) outputs/runs_true_k/k3_r30_opt_centers/summary.txt
+3) outputs/runs_true_k/k5_r30_opt_centers/summary.txt
+4) outputs/runs_true_k/k8_r30_opt_centers/summary.txt
+5) outputs/runs_true_k/k3_r30_opt_centers/final_centers.csv
+6) outputs/runs_true_k/k5_r30_opt_centers/final_centers.csv
+7) outputs/runs_true_k/k8_r30_opt_centers/final_centers.csv
+8) logs/k3_r30_opt_centers.log
+9) logs/k5_r30_opt_centers.log
+10) logs/k8_r30_opt_centers.log
+
+This workflow guarantees K and seeds.input are aligned, so the K-vs-SSE comparison is valid.

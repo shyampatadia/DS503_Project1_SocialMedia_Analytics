@@ -1,0 +1,73 @@
+Task 1- Revisiting The CircleNet Network with Pig [16 Points]
+Rewrite the 8 Tasks (part 3 a-h) from Project 1 using Apache Pig and test them on the
+data you created as part of Project 1.  -
+In your report, describe how you chose to implement each task and discuss the
+trade-off between using Apache Pig and standard MapReduce. [2 pts for each
+task]
+
+Task 2 - Clustering [44 Points]
+K-Means clustering is a data mining algorithm that groups objects together (see, for
+example, http://en.wikipedia.org/wiki/K-means_clustering#Standard_algorithm for
+additional details). It starts with an initial seed of K points (randomly chosen) as
+centers, and then iteratively enhances these centers with the closest data points in the
+dataset.
+As a reminder, your system should terminate if either of these two conditions become true:
+a) The K centers did not change over two consecutive iterations
+b) The max number of iterations has been reached (parameter R for rounds)
+
+Task 2.1 (Creation of Dataset):
+• Create a large dataset of at least 6,000 points consisting of 4-dimensional points, i.e., each point has (w, x, y, z) values.
+    - w values range from 0 to 10,000; x values range from 20,000 to 1,000,000; y and z can be whatever you decide (note that using numeric
+      values will be a bit easier).
+• Create another file containing K initial seed points. Make the "K" value as a parameter to your program, such that your program will generate these K seeds randomly, and then upload the generated file to HDFS.
+
+Task 2.2 (Clustering the Data):
+Develop the K-means clustering strategies described below using Java MapReduce jobs. You should document the differences between your solutions, i.e., what changes
+were made to the mapper, to the reducer, number of mappers/reducers, or in the main control program. These algorithms should include:
+a) A single-iteration K-means algorithm (R=1) [5 pts]
+b) A basic multi-iteration K-means algorithm (the parameter R is set to
+terminate the process, e.g., R=10); that is, no early termination will be done
+here. [5 pts]
+c) An additional (advanced) multi-iteration K-means algorithm that terminates
+potentially earlier if it converges based on some threshold. [6 pts]
+d) An additional (advanced) algorithm that also uses Hadoop Map Reduce
+optimizations as discussed in class (e.g., a combiner). [6 pts]
+e) For your K-means solution in subproblem (d) above, also extract output.
+Consider the two following output variations:
+    i. return only cluster centers along with an indication if convergence has been reached; [6 pts]
+    ii. return the final clustered data points along with their cluster centers. [6 pts]
+f) Provide a description for each of your above five solutions in your report and
+conduct experiments over them, for example by choosing different K
+values (e.g., show how the clusters change for different K values) and different
+R values (e.g., show how the clusters change over different rounds). Describe
+the relative performance, explain, and analyze your findings. [10 pts]
+Note: Since the algorithm is iterative, you need your main program that generates the
+MapReduce jobs to also control whether it should start another iteration.
+
+
+Task 3 - Get Creative!
+- Choose two alternatives from following to extend the project. You can either choose one of the following options or come up with an option of your own. You need to specify in your report which two alternatives you have implemented.
+
+a. BYOD (Bring Your Own Data): Find a relevant dataset online (e.g.,
+using kaggle) and run your K-means algorithm over the new dataset by
+repeating the steps from above (2.2a-e).  Describe the dataset in your
+report, repeat the experiments from above (2.2f) and add to the report.
+
+b. Offer an extension of k-means (e.g., k-medoids): Provide an adaptation to the K-means algorithm implemented above. Repeat the  steps from above (2.2a-e) and the respective experiments (2.2f) and add
+them to your report.
+
+c. Implement a different clustering algorithm: Provide an implementation (in Java map reduce code) of an alternative clustering
+algorithm (e.g., Hierarchical Clustering), repeat the steps from above (2.2a-e) and the respective experiments (2.2f) and add to your report.
+
+d. Visualize the output of the clustering algorithm/s: Enrich your report by visualizing the clustering results. The visualization/evaluation step may
+be implemented as a separate Java program that reads clustering results from HDFS and writes results (plots / metrics) back to HDFS or local
+output. You can use, for example, Apache Zeppelin, which has a Java
+interpreter and integrates with Hadoop. For 4D data, you may visualize
+results using:
+(i) any 2D/3D projection of the original features.
+(ii) PCA to 2D/3D
+(iii) parallel coordinates. Points should be colored by assigned cluster. Use the added visualization to support your findings (2.2f) and
+update your report accordingly.
+
+e. Evaluate the output of the clustering algorithm/s: Enrich your report by implementing a clustering evaluation measure (e.g., Silhouette). This implementation should be done using Java code with Hadoop
+MapReduce. Use the added evaluation to enrich your findings (2.2f) and update your report accordingly.

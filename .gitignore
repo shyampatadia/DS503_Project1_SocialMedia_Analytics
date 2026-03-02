@@ -39,3 +39,21 @@ build/
 
 output_all
 results_task*
+
+# Task 2 generated artifacts / local experiment outputs
+project2_task2ml_output/
+project2_task2_hdfs/
+project2_task2_output/
+project2_task2_input/
+task2_logs/
+task2_report_artifact/
+task2_report_artifacts_scalable/
+
+# Keep runtime assets tracked
+!*.properties
+!*.sh
+
+# Keep only one instruction document
+*instruction*.txt
+*instructions*.txt
+!project2_task2_report_strengthening_instructions.txt

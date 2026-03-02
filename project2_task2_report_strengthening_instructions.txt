@@ -1,0 +1,188 @@
+﻿Project 2 Task 2 - Report Strengthening Instructions (for 5 missing items)
+
+Goal:
+Create the exact artifacts needed to add these sections to your report:
+1) compact experiment table (K,R,thresholds,converged,rounds,runtime,final_sse)
+2) start seeds -> final centers example
+3) scaling test by data size (optimized vs non-optimized)
+4) one clearly converged run narrative
+5) short explanation why convergence differs by K
+
+Assumptions:
+- Host project path: D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\ds503_bdm
+- Docker container id: 22f9a6ab98fe
+- New jar already includes task2simple updates (SSE + metrics)
+
+====================================================================
+A) Host build + copy jar/config to Docker
+====================================================================
+On host (PowerShell):
+cd D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\ds503_bdm
+mvn -DskipTests clean package
+
+docker cp target/ds503_bdm-1.0-SNAPSHOT.jar 22f9a6ab98fe:/home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+docker cp project2_task2_config.properties 22f9a6ab98fe:/home/ds503/project2_task2_config.properties
+
+====================================================================
+B) Open Docker and initialize artifact folder
+====================================================================
+On host:
+docker exec -it 22f9a6ab98fe bash
+
+Inside Docker:
+rm -rf /home/ds503/task2_report_plus || true
+mkdir -p /home/ds503/task2_report_plus/logs
+mkdir -p /home/ds503/task2_report_plus/tables
+mkdir -p /home/ds503/task2_report_plus/examples
+
+# runtime tracker used in multiple sections
+echo "label,time_s,success" > /home/ds503/task2_report_plus/tables/runtime.csv
+
+# helper (simple + reusable)
+run_km () {
+  label="$1"; shift
+  start=$(date +%s)
+  hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain \
+    /home/ds503/project2_task2_config.properties "$@" \
+    > "/home/ds503/task2_report_plus/logs/${label}.log" 2>&1
+  rc=$?
+  end=$(date +%s)
+  sec=$((end-start))
+  echo "$label,$sec,$([ $rc -eq 0 ] && echo 1 || echo 0)" >> /home/ds503/task2_report_plus/tables/runtime.csv
+  echo "$label done (sec=$sec, rc=$rc)"
+}
+
+====================================================================
+C) Build compact experiment table (Item 1)
+====================================================================
+# Clean run area for this section
+hdfs dfs -rm -r -f /project2/task2/runs_report_plus || true
+
+# True K-wise runs (with matching seeds)
+run_km k3_r30_opt mode=OPT_CENTERS k=3 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=3 seeds.input=/project2/task2/input/seeds_k3.csv output.base=/project2/task2/runs_report_plus/k3_r30_opt
+run_km k5_r30_opt mode=OPT_CENTERS k=5 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/task2/input/seeds_k5.csv output.base=/project2/task2/runs_report_plus/k5_r30_opt
+run_km k8_r30_opt mode=OPT_CENTERS k=8 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/task2/input/seeds_k8.csv output.base=/project2/task2/runs_report_plus/k8_r30_opt
+
+# Build compact table with required columns
+echo "run,k,r,epsilon,sse_epsilon,min_rounds,mode,reducers,converged,rounds_executed,runtime_s,final_sse" > /home/ds503/task2_report_plus/tables/compact_experiment_table.csv
+
+for L in k3_r30_opt k5_r30_opt k8_r30_opt; do
+  if [ "$L" = "k3_r30_opt" ]; then K=3; R=30; RED=3; OUT=/project2/task2/runs_report_plus/k3_r30_opt; fi
+  if [ "$L" = "k5_r30_opt" ]; then K=5; R=30; RED=4; OUT=/project2/task2/runs_report_plus/k5_r30_opt; fi
+  if [ "$L" = "k8_r30_opt" ]; then K=8; R=30; RED=4; OUT=/project2/task2/runs_report_plus/k8_r30_opt; fi
+
+  hdfs dfs -cat ${OUT}/summary.txt > /tmp/_sum_${L}.txt
+  conv=$(grep '^converged=' /tmp/_sum_${L}.txt | cut -d= -f2)
+  rounds=$(grep '^rounds_executed=' /tmp/_sum_${L}.txt | cut -d= -f2)
+  fsse=$(grep '^final_sse=' /tmp/_sum_${L}.txt | cut -d= -f2)
+  rt=$(grep "^${L}," /home/ds503/task2_report_plus/tables/runtime.csv | tail -1 | cut -d, -f2)
+  echo "${L},${K},${R},0.001,1000,5,OPT_CENTERS,${RED},${conv},${rounds},${rt},${fsse}" >> /home/ds503/task2_report_plus/tables/compact_experiment_table.csv
+done
+
+cat /home/ds503/task2_report_plus/tables/compact_experiment_table.csv
+
+====================================================================
+D) Start seeds -> final centers examples (Item 2)
+====================================================================
+# Example 1: K=3
+hdfs dfs -cat /project2/task2/input/seeds_k3.csv > /home/ds503/task2_report_plus/examples/k3_start_seeds.csv
+hdfs dfs -cat /project2/task2/runs_report_plus/k3_r30_opt/final_centers.csv > /home/ds503/task2_report_plus/examples/k3_final_centers.csv
+
+# Example 2: K=8
+hdfs dfs -cat /project2/task2/input/seeds_k8.csv > /home/ds503/task2_report_plus/examples/k8_start_seeds.csv
+hdfs dfs -cat /project2/task2/runs_report_plus/k8_r30_opt/final_centers.csv > /home/ds503/task2_report_plus/examples/k8_final_centers.csv
+
+====================================================================
+E) Scaling test by data size (Item 3)
+====================================================================
+# Same K/R/thresholds; compare BASIC vs OPT_CENTERS for bigger data
+# We generate local files with DataSeedMain, put to HDFS, then run both modes.
+
+echo "dataset_points,mode,time_s,converged,rounds_executed,final_sse" > /home/ds503/task2_report_plus/tables/scaling_table.csv
+
+# -------- size = 100000 --------
+java -cp /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.DataSeedMain /home/ds503/project2_task2_config.properties num.points=100000 k=5 local.points.file=/home/ds503/points_100k.csv local.seeds.file=/home/ds503/seeds_100k_k5.csv
+hdfs dfs -rm -r -f /project2/task2/input/points_100k.csv || true
+hdfs dfs -rm -r -f /project2/task2/input/seeds_100k_k5.csv || true
+hdfs dfs -put /home/ds503/points_100k.csv /project2/task2/input/points_100k.csv
+hdfs dfs -put /home/ds503/seeds_100k_k5.csv /project2/task2/input/seeds_100k_k5.csv
+
+run_km scale100k_basic mode=BASIC k=5 rounds=20 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 points.input=/project2/task2/input/points_100k.csv seeds.input=/project2/task2/input/seeds_100k_k5.csv output.base=/project2/task2/runs_report_plus/scale100k_basic
+run_km scale100k_opt mode=OPT_CENTERS k=5 rounds=20 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 points.input=/project2/task2/input/points_100k.csv seeds.input=/project2/task2/input/seeds_100k_k5.csv output.base=/project2/task2/runs_report_plus/scale100k_opt
+
+for X in scale100k_basic scale100k_opt; do
+  hdfs dfs -cat /project2/task2/runs_report_plus/${X}/summary.txt > /tmp/_sum_${X}.txt
+  conv=$(grep '^converged=' /tmp/_sum_${X}.txt | cut -d= -f2)
+  rounds=$(grep '^rounds_executed=' /tmp/_sum_${X}.txt | cut -d= -f2)
+  fsse=$(grep '^final_sse=' /tmp/_sum_${X}.txt | cut -d= -f2)
+  rt=$(grep "^${X}," /home/ds503/task2_report_plus/tables/runtime.csv | tail -1 | cut -d, -f2)
+  mode=$(echo $X | grep -q opt && echo OPT_CENTERS || echo BASIC)
+  echo "100000,${mode},${rt},${conv},${rounds},${fsse}" >> /home/ds503/task2_report_plus/tables/scaling_table.csv
+done
+
+# -------- size = 500000 --------
+java -cp /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.DataSeedMain /home/ds503/project2_task2_config.properties num.points=500000 k=5 local.points.file=/home/ds503/points_500k.csv local.seeds.file=/home/ds503/seeds_500k_k5.csv
+hdfs dfs -rm -r -f /project2/task2/input/points_500k.csv || true
+hdfs dfs -rm -r -f /project2/task2/input/seeds_500k_k5.csv || true
+hdfs dfs -put /home/ds503/points_500k.csv /project2/task2/input/points_500k.csv
+hdfs dfs -put /home/ds503/seeds_500k_k5.csv /project2/task2/input/seeds_500k_k5.csv
+
+run_km scale500k_basic mode=BASIC k=5 rounds=20 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 points.input=/project2/task2/input/points_500k.csv seeds.input=/project2/task2/input/seeds_500k_k5.csv output.base=/project2/task2/runs_report_plus/scale500k_basic
+run_km scale500k_opt mode=OPT_CENTERS k=5 rounds=20 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 points.input=/project2/task2/input/points_500k.csv seeds.input=/project2/task2/input/seeds_500k_k5.csv output.base=/project2/task2/runs_report_plus/scale500k_opt
+
+for X in scale500k_basic scale500k_opt; do
+  hdfs dfs -cat /project2/task2/runs_report_plus/${X}/summary.txt > /tmp/_sum_${X}.txt
+  conv=$(grep '^converged=' /tmp/_sum_${X}.txt | cut -d= -f2)
+  rounds=$(grep '^rounds_executed=' /tmp/_sum_${X}.txt | cut -d= -f2)
+  fsse=$(grep '^final_sse=' /tmp/_sum_${X}.txt | cut -d= -f2)
+  rt=$(grep "^${X}," /home/ds503/task2_report_plus/tables/runtime.csv | tail -1 | cut -d, -f2)
+  mode=$(echo $X | grep -q opt && echo OPT_CENTERS || echo BASIC)
+  echo "500000,${mode},${rt},${conv},${rounds},${fsse}" >> /home/ds503/task2_report_plus/tables/scaling_table.csv
+done
+
+cat /home/ds503/task2_report_plus/tables/scaling_table.csv
+
+====================================================================
+F) Converged run narrative inputs (Item 4)
+====================================================================
+# We already have a converged run candidate (k3_r30_opt)
+# Save key evidence files:
+hdfs dfs -cat /project2/task2/runs_report_plus/k3_r30_opt/summary.txt > /home/ds503/task2_report_plus/examples/k3_converged_summary.txt
+hdfs dfs -cat /project2/task2/runs_report_plus/k3_r30_opt/metrics.csv > /home/ds503/task2_report_plus/examples/k3_converged_metrics.csv
+
+====================================================================
+G) K-wise convergence explanation inputs (Item 5)
+====================================================================
+# Save summaries and first/last lines from metrics for K=3,5,8
+for X in k3_r30_opt k5_r30_opt k8_r30_opt; do
+  hdfs dfs -cat /project2/task2/runs_report_plus/${X}/summary.txt > /home/ds503/task2_report_plus/examples/${X}_summary.txt
+  hdfs dfs -cat /project2/task2/runs_report_plus/${X}/metrics.csv | head -5 > /home/ds503/task2_report_plus/examples/${X}_metrics_head.csv
+  hdfs dfs -cat /project2/task2/runs_report_plus/${X}/metrics.csv | tail -5 > /home/ds503/task2_report_plus/examples/${X}_metrics_tail.csv
+done
+
+====================================================================
+H) Copy all report-strengthening artifacts back to HOST
+====================================================================
+Inside Docker:
+exit
+
+On host (PowerShell):
+mkdir task2_report_artifacts_plus -Force
+docker cp 9cd2f8c34775:/home/ds503/task2_report_plus/. ./task2_report_artifacts_plus/
+
+====================================================================
+I) Files you will use directly in report
+====================================================================
+./task2_report_artifacts_plus/tables/compact_experiment_table.csv
+./task2_report_artifacts_plus/tables/scaling_table.csv
+./task2_report_artifacts_plus/examples/k3_start_seeds.csv
+./task2_report_artifacts_plus/examples/k3_final_centers.csv
+./task2_report_artifacts_plus/examples/k8_start_seeds.csv
+./task2_report_artifacts_plus/examples/k8_final_centers.csv
+./task2_report_artifacts_plus/examples/k3_converged_summary.txt
+./task2_report_artifacts_plus/examples/k3_converged_metrics.csv
+./task2_report_artifacts_plus/examples/k3_r30_opt_summary.txt
+./task2_report_artifacts_plus/examples/k5_r30_opt_summary.txt
+./task2_report_artifacts_plus/examples/k8_r30_opt_summary.txt
+
+After you generate these files, I can patch the TeX in one pass.
