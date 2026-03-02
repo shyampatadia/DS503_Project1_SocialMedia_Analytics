@@ -1,0 +1,242 @@
+Project 2 Task 3(a) BYOD - Poker Hand Dataset (End-to-End)
+
+Goal:
+- Implement Task 3(a) using a real external dataset (UCI Poker Hand).
+- Re-run the same K-means variants from Task 2.2 (a-e), then repeat experiments from 2.2(f).
+- Produce clean artifacts for report writing.
+
+Dataset:
+- UCI Poker Hand:
+  https://archive.ics.uci.edu/dataset/158/poker+hand
+- Files:
+  - poker-hand-training-true.data
+  - poker-hand-testing.data
+- Each row has 11 columns:
+  S1,C1,S2,C2,S3,C3,S4,C4,S5,C5,CLASS
+- We cluster only the first 10 numeric features (drop CLASS).
+
+Assumptions:
+- Host project path:
+  D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\ds503_bdm
+- Docker container ID:
+  9cd2f8c34775
+- Main class stays:
+  project2.task2simple.KMeansMain
+
+====================================================================
+1) HOST - Build jar
+====================================================================
+cd D:\DATA_SCIENCE_2025\semester2\bdm_data\project1_resources\ds503_bdm
+mvn -DskipTests clean package
+
+Copy jar to container:
+docker cp target/ds503_bdm-1.0-SNAPSHOT.jar 9cd2f8c34775:/home/ds503/ds503_bdm-1.0-SNAPSHOT.jar
+
+====================================================================
+2) Enter Docker and prepare workspace
+====================================================================
+docker exec -it 9cd2f8c34775 bash
+
+Inside container:
+mkdir -p /home/ds503/byod_poker/raw
+mkdir -p /home/ds503/byod_poker/processed
+mkdir -p /home/ds503/byod_poker/artifacts/logs
+
+====================================================================
+3) Download BYOD dataset inside Docker
+====================================================================
+Inside container:
+cd /home/ds503/byod_poker/raw
+wget -O poker_train.data https://archive.ics.uci.edu/static/public/158/poker+hand.zip
+
+If zip is downloaded, extract:
+unzip -o poker_train.data -d /home/ds503/byod_poker/raw_zip
+
+Expected extracted files:
+- /home/ds503/byod_poker/raw_zip/poker-hand-training-true.data
+- /home/ds503/byod_poker/raw_zip/poker-hand-testing.data
+
+If direct zip link fails in your environment:
+- Download both files manually on host from UCI page, then:
+  docker cp <host_train_path> 9cd2f8c34775:/home/ds503/byod_poker/raw/poker-hand-training-true.data
+  docker cp <host_test_path> 9cd2f8c34775:/home/ds503/byod_poker/raw/poker-hand-testing.data
+
+====================================================================
+4) Build K-means input points file (drop CLASS column)
+====================================================================
+Inside container:
+# Try extracted location first
+TRAIN=/home/ds503/byod_poker/raw_zip/poker-hand-training-true.data
+TEST=/home/ds503/byod_poker/raw_zip/poker-hand-testing.data
+
+# Fallback to raw if you copied files manually
+if [ ! -f "$TRAIN" ]; then TRAIN=/home/ds503/byod_poker/raw/poker-hand-training-true.data; fi
+if [ ! -f "$TEST" ]; then TEST=/home/ds503/byod_poker/raw/poker-hand-testing.data; fi
+
+cat "$TRAIN" "$TEST" | awk -F',' '{print $1","$2","$3","$4","$5","$6","$7","$8","$9","$10}' > /home/ds503/byod_poker/processed/poker_points_10d.csv
+
+Sanity check:
+head -n 3 /home/ds503/byod_poker/processed/poker_points_10d.csv
+wc -l /home/ds503/byod_poker/processed/poker_points_10d.csv
+
+====================================================================
+5) Upload BYOD input to HDFS
+====================================================================
+Inside container:
+hdfs dfs -mkdir -p /project2/byod_poker/input
+hdfs dfs -rm -r -f /project2/byod_poker/input/poker_points_10d.csv || true
+hdfs dfs -put /home/ds503/byod_poker/processed/poker_points_10d.csv /project2/byod_poker/input/poker_points_10d.csv
+hdfs dfs -ls /project2/byod_poker/input
+
+====================================================================
+6) Generate seeds for required K values
+====================================================================
+Inside container:
+hdfs dfs -cat /project2/byod_poker/input/poker_points_10d.csv > /home/ds503/byod_poker/processed/poker_points_local.csv
+
+for K in 3 5 8; do
+  awk -F',' -v K="$K" 'NR<=K {printf "%d,%s\n", NR-1, $0}' /home/ds503/byod_poker/processed/poker_points_local.csv > /home/ds503/byod_poker/processed/seeds_k${K}.csv
+  hdfs dfs -rm -r -f /project2/byod_poker/input/seeds_k${K}.csv || true
+  hdfs dfs -put /home/ds503/byod_poker/processed/seeds_k${K}.csv /project2/byod_poker/input/seeds_k${K}.csv
+  echo "k=${K} seed lines: $(hdfs dfs -cat /project2/byod_poker/input/seeds_k${K}.csv | wc -l)"
+done
+
+====================================================================
+7) Create BYOD config file in container
+====================================================================
+Inside container:
+cat > /home/ds503/project2_byod_poker_config.properties << 'EOF'
+train.input.raw=/project2/byod_poker/input/poker_points_10d.csv
+train.input.scaled=
+model.base=/project2/byod_poker/model
+model.centers.path=
+model.sse.path=/project2/byod_poker/model/metrics_sse
+output.base=/project2/byod_poker/runs/default
+k=5
+rounds=30
+mode=OPT_CENTERS
+epsilon=0.001
+sse.epsilon=1000
+min.rounds=5
+reducers=4
+seeds.input=/project2/byod_poker/input/seeds_k5.csv
+EOF
+
+====================================================================
+8) Run Task 2.2(a-e) equivalents on BYOD
+====================================================================
+Inside container:
+mkdir -p /home/ds503/byod_poker/artifacts/logs
+echo "label,time_s,success" > /home/ds503/byod_poker/artifacts/byod_times.csv
+
+run_km () {
+  label="$1"; shift
+  start=$(date +%s)
+  hadoop jar /home/ds503/ds503_bdm-1.0-SNAPSHOT.jar project2.task2simple.KMeansMain \
+    /home/ds503/project2_byod_poker_config.properties "$@" \
+    > "/home/ds503/byod_poker/artifacts/logs/${label}.log" 2>&1
+  rc=$?
+  end=$(date +%s)
+  sec=$((end-start))
+  if [ $rc -eq 0 ]; then ok=1; else ok=0; fi
+  echo "$label,$sec,$ok" >> /home/ds503/byod_poker/artifacts/byod_times.csv
+  echo "$label done (success=$ok, sec=$sec)"
+  return $rc
+}
+
+# 2.2(a)
+run_km byod_single_k5_r1 mode=SINGLE k=5 rounds=1 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/byod_single_k5_r1
+
+# 2.2(b)
+run_km byod_basic_k5_r10 mode=BASIC k=5 rounds=10 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/byod_basic_k5_r10
+
+# 2.2(c)
+run_km byod_early_k5_r30 mode=EARLY k=5 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/byod_early_k5_r30
+
+# 2.2(d)+(e)(i)
+run_km byod_opt_centers_k5_r30 mode=OPT_CENTERS k=5 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/byod_opt_centers_k5_r30
+
+# 2.2(e)(ii)
+run_km byod_opt_points_k5_r30 mode=OPT_POINTS k=5 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/byod_opt_points_k5_r30
+
+====================================================================
+9) Run 2.2(f) experiment matrix (K and R variation)
+====================================================================
+Inside container:
+echo "run,k,r,mode,converged,rounds_executed,final_sse,runtime_s" > /home/ds503/byod_poker/artifacts/byod_experiment_table.csv
+
+# EARLY + OPT_CENTERS for K={3,5,8}, R={10,30}
+run_km exp_k3_r10_early mode=EARLY k=3 rounds=10 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=3 seeds.input=/project2/byod_poker/input/seeds_k3.csv output.base=/project2/byod_poker/runs/exp/k3_r10_early
+run_km exp_k3_r10_opt   mode=OPT_CENTERS k=3 rounds=10 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=3 seeds.input=/project2/byod_poker/input/seeds_k3.csv output.base=/project2/byod_poker/runs/exp/k3_r10_opt
+
+run_km exp_k3_r30_early mode=EARLY k=3 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=3 seeds.input=/project2/byod_poker/input/seeds_k3.csv output.base=/project2/byod_poker/runs/exp/k3_r30_early
+run_km exp_k3_r30_opt mode=OPT_CENTERS k=3 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=3 seeds.input=/project2/byod_poker/input/seeds_k3.csv output.base=/project2/byod_poker/runs/exp/k3_r30_opt
+
+run_km exp_k5_r10_early mode=EARLY k=5 rounds=10 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/exp/k5_r10_early
+run_km exp_k5_r10_opt mode=OPT_CENTERS k=5 rounds=10 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/exp/k5_r10_opt
+
+run_km exp_k5_r30_early mode=EARLY k=5 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/exp/k5_r30_early
+run_km exp_k5_r30_opt mode=OPT_CENTERS k=5 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k5.csv output.base=/project2/byod_poker/runs/exp/k5_r30_opt
+
+run_km exp_k8_r10_early mode=EARLY k=8 rounds=10 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k8.csv output.base=/project2/byod_poker/runs/exp/k8_r10_early
+run_km exp_k8_r10_opt mode=OPT_CENTERS k=8 rounds=10 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k8.csv output.base=/project2/byod_poker/runs/exp/k8_r10_opt
+
+run_km exp_k8_r30_early mode=EARLY k=8 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k8.csv output.base=/project2/byod_poker/runs/exp/k8_r30_early
+run_km exp_k8_r30_opt mode=OPT_CENTERS k=8 rounds=30 epsilon=0.001 sse.epsilon=1000 min.rounds=5 reducers=4 seeds.input=/project2/byod_poker/input/seeds_k8.csv output.base=/project2/byod_poker/runs/exp/k8_r30_opt
+
+# Build compact experiment table from summary files (explicit list)
+for tag in k3_r10_early k3_r10_opt k3_r30_early k3_r30_opt k5_r10_early k5_r10_opt k5_r30_early k5_r30_opt k8_r10_early k8_r10_opt k8_r30_early k8_r30_opt; do
+  hp="/project2/byod_poker/runs/exp/${tag}"
+  k=$(hdfs dfs -cat ${hp}/summary.txt | sed -n 's/^k=//p')
+  r=$(hdfs dfs -cat ${hp}/summary.txt | sed -n 's/^rounds_executed=//p')
+  conv=$(hdfs dfs -cat ${hp}/summary.txt | sed -n 's/^converged=//p')
+  sse=$(hdfs dfs -cat ${hp}/summary.txt | sed -n 's/^final_sse=//p')
+  mode=$(hdfs dfs -cat ${hp}/summary.txt | sed -n 's/^mode=//p')
+  t=$(grep "^exp_${tag}," /home/ds503/byod_poker/artifacts/byod_times.csv | tail -n1 | cut -d',' -f2)
+  rr=$(echo "$tag" | awk -F'_' '{print substr($2,2)}')
+  echo "${tag},${k},${rr},${mode},${conv},${r},${sse},${t}" >> /home/ds503/byod_poker/artifacts/byod_experiment_table.csv
+done
+
+====================================================================
+10) Collect files needed for report
+====================================================================
+Inside container:
+mkdir -p /home/ds503/byod_poker/artifacts/outputs
+hdfs dfs -get /project2/byod_poker/runs /home/ds503/byod_poker/artifacts/outputs/
+
+# Dataset facts for report
+{
+  echo "dataset=UCI Poker Hand"
+  echo "source=https://archive.ics.uci.edu/dataset/158/poker+hand"
+  echo "features_used=10 (S1,C1,S2,C2,S3,C3,S4,C4,S5,C5)"
+  echo "points_file=/project2/byod_poker/input/poker_points_10d.csv"
+  echo "num_rows=$(hdfs dfs -cat /project2/byod_poker/input/poker_points_10d.csv | wc -l)"
+} > /home/ds503/byod_poker/artifacts/byod_dataset_facts.txt
+
+====================================================================
+11) Copy artifacts from Docker to host
+====================================================================
+Inside container:
+exit
+
+On host (PowerShell):
+mkdir task3a_byod_poker_artifacts -Force
+docker cp 9cd2f8c34775:/home/ds503/byod_poker/artifacts/. ./task3a_byod_poker_artifacts/
+
+====================================================================
+12) What to send for report writing
+====================================================================
+Send/confirm these files:
+1) task3a_byod_poker_artifacts/byod_dataset_facts.txt
+2) task3a_byod_poker_artifacts/byod_times.csv
+3) task3a_byod_poker_artifacts/byod_experiment_table.csv
+4) task3a_byod_poker_artifacts/logs/ (all logs)
+5) task3a_byod_poker_artifacts/outputs/runs/byod_single_k5_r1/summary.txt
+6) task3a_byod_poker_artifacts/outputs/runs/byod_basic_k5_r10/summary.txt
+7) task3a_byod_poker_artifacts/outputs/runs/byod_early_k5_r30/summary.txt
+8) task3a_byod_poker_artifacts/outputs/runs/byod_opt_centers_k5_r30/final_centers.csv
+9) task3a_byod_poker_artifacts/outputs/runs/byod_opt_centers_k5_r30/summary.txt
+10) task3a_byod_poker_artifacts/outputs/runs/byod_opt_points_k5_r30/final_points_with_centers/part-m-00000
+11) task3a_byod_poker_artifacts/outputs/runs/exp/... (all exp summaries)
+
+With these, report section for BYOD can be written end-to-end (dataset description, 2.2a-e coverage, 2.2f experiments, and analysis).

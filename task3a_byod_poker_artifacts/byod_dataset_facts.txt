@@ -1,0 +1,5 @@
+dataset=UCI Poker Hand
+source=https://archive.ics.uci.edu/dataset/158/poker+hand
+features_used=10 (S1,C1,S2,C2,S3,C3,S4,C4,S5,C5)
+points_file=/project2/byod_poker/input/poker_points_10d.csv
+num_rows=1025010

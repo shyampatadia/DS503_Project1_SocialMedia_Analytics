@@ -39,6 +39,8 @@ build/
 
 output_all
 results_task*
+results_pig_output/
+screenshots_report/
 
 # Task 2 generated artifacts / local experiment outputs
 project2_task2ml_output/
@@ -48,6 +50,44 @@ project2_task2_input/
 task2_logs/
 task2_report_artifact/
 task2_report_artifacts_scalable/
+
+# Keep report-referenced artifact folders (plus/truek) tracked for now
+# task2_report_artifacts_plus/
+# task2_report_artifacts_truek/
+
+# Task 3 generated artifacts (keep only report-level summaries/plots)
+task3d_viz_input/
+task3d_viz_output/
+task3a_byod_poker_artifacts/logs/
+task3a_byod_poker_artifacts/outputs/
+
+# Python visualization runtime/cache
+task3d_viz_py/.venv/
+task3d_viz_py/venv/
+task3d_viz_py/__pycache__/
+task3d_viz_py/**/*.pyc
+
+# Keep final 3D plot outputs used in report
+task3d_viz_py/out_*/
+!task3d_viz_py/out_k3/
+!task3d_viz_py/out_k5/
+!task3d_viz_py/out_k8/
+
+# Keep BYOD summary tables used in report
+!task3a_byod_poker_artifacts/byod_dataset_facts.txt
+!task3a_byod_poker_artifacts/byod_experiment_table.csv
+!task3a_byod_poker_artifacts/byod_times.csv
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
 
 # Keep runtime assets tracked
 !*.properties

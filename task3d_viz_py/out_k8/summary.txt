@@ -1,0 +1,5 @@
+input=..\task3d_viz_input\k8_final_points_with_centers
+sampled_points=10000
+pca_variance_ratio=[0.9792973020456404, 0.01042609804147423]
+pca3_variance_ratio=[0.9792973020456404, 0.01042609804147423, 0.010173333041754724]
+tsne_perplexity=30.0
